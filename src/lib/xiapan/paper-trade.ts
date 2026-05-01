@@ -119,7 +119,22 @@ export interface RiskGate {
   reason?: string;
 }
 
-export function canPlaceTrade(costDollars: number): RiskGate {
+/// V0.70 · 同 ticker + 同 side · 1 小时内有 open 单 · 不再重复下
+export function hasOpenDuplicate(ticker: string, side: string): boolean {
+  const trades = readAllTrades(2);
+  const now = Date.now();
+  return trades.some((t) =>
+    !t.closed_at
+    && t.ticker === ticker
+    && t.side === side
+    && (now - new Date(t.opened_at).getTime()) < 3600_000
+  );
+}
+
+export function canPlaceTrade(costDollars: number, ticker?: string, side?: string): RiskGate {
+  if (ticker && side && hasOpenDuplicate(ticker, side)) {
+    return { allowed: false, reason: `同 ticker+side 1h 内已有 open 单 · 去重` };
+  }
   if (costDollars > PAPER_PER_TRADE) {
     return { allowed: false, reason: `单笔 $${costDollars.toFixed(2)} > 上限 $${PAPER_PER_TRADE}` };
   }

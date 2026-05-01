@@ -73,7 +73,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "ticker/side/qty/entry_price_c/cost_dollars required" }, { status: 400 });
   }
 
-  const gate = canPlaceTrade(cost);
+  const gate = canPlaceTrade(cost, ticker, side);
   if (!gate.allowed) {
     return NextResponse.json({ ok: false, blocked_by_risk: true, reason: gate.reason }, { status: 200 });
   }
