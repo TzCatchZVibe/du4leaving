@@ -15,11 +15,12 @@ import { chat } from "@/lib/xiapan/llm";
 import { buildToolsDescription, parseToolCalls, executeTool, serializeToolResults, type ToolResult } from "@/lib/xiapan/hermes-tools";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 90;
+export const maxDuration = 120;
 const MAX_TOOL_HOPS = 3;
 
 interface SageRequest {
   question: string;
+  prefer_cloud?: boolean;          // V0.66 · true → 强制 OpenRouter 405B (重大决断)
   context?: {
     positions?: Array<{ ticker: string; side: string; qty: number; pnl?: number; pnl_pct?: number }>;
     picks?: Array<{ ticker: string; title: string; score: number; reasons?: string[] }>;
@@ -138,6 +139,13 @@ export async function POST(req: Request) {
   const toolsDesc = buildToolsDescription();
   const augmentedSystem = `${SYSTEM}\n\n${toolsDesc}`;
 
+  // V0.66 · prefer_cloud=true 强制走 OpenRouter Hermes 405B (重大决断)
+  const preferCloud = body.prefer_cloud === true;
+  const originalProviderEnv = process.env.LLM_PROVIDER;
+  if (preferCloud) {
+    process.env.LLM_PROVIDER = "openrouter";
+  }
+
   let lastProvider = "static";
   let totalTokens = 0;
   const allToolResults: ToolResult[] = [];
@@ -207,5 +215,14 @@ export async function POST(req: Request) {
       },
       { status: 200 }
     );
+  } finally {
+    // V0.66 · 还原 env (避免影响后续请求)
+    if (preferCloud) {
+      if (originalProviderEnv === undefined) {
+        delete process.env.LLM_PROVIDER;
+      } else {
+        process.env.LLM_PROVIDER = originalProviderEnv;
+      }
+    }
   }
 }
