@@ -35,6 +35,10 @@
     {
       "path": "/api/xiapan/intel/whale-diff?cron=1",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/xiapan/paper-trade?action=tick&cron=1",
+      "schedule": "*/10 * * * *"
     }
   ]
 }

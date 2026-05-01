@@ -39,6 +39,10 @@ export async function laohuContext(): Promise<string> {
     const r = await fetch(`${URL_PREFIX}/api/xiapan/picks?min=45&limit=8`, { cache: "no-store" });
     const d = await r.json();
     const picks = (d.picks ?? []).slice(0, 6);
+
+    // V0.67 [A] paper trade · 老虎自动 record score ≥ 75 picks (虚拟下单)
+    await maybeAutoPaperTrade(picks);
+
     return [
       "【实时 picks · 当前最便宜的押】",
       picks.map((p: { score: number; ticker: string; title: string; buy_side: string; buy_price_c: number; reasons?: string[] }) =>
@@ -49,6 +53,49 @@ export async function laohuContext(): Promise<string> {
     ].join("\n");
   } catch (e) {
     return `数据拉取失败 · ${(e as Error).message}`;
+  }
+}
+
+interface PickLite {
+  score: number;
+  ticker: string;
+  title?: string;
+  buy_side: string;
+  buy_price_c: number;
+  reasons?: string[];
+}
+
+/// V0.67 · 老虎跑时如果有 score ≥ 75 picks · 自动模拟下单
+/// 风控由 paper-trade endpoint 内部 canPlaceTrade 校验
+async function maybeAutoPaperTrade(picks: PickLite[]) {
+  const PAPER_PER_TRADE = 2;          // $2/单
+  const MIN_SCORE = 75;
+  const top = picks.find((p) => p.score >= MIN_SCORE && p.buy_price_c > 0 && p.buy_price_c < 95);
+  if (!top) return;
+
+  // qty 算法 · $2 / (price/100) = qty (取整 · 至少 1)
+  const qty = Math.max(1, Math.floor((PAPER_PER_TRADE * 100) / top.buy_price_c));
+  const cost = Number(((qty * top.buy_price_c) / 100).toFixed(2));
+
+  try {
+    await fetch(`${URL_PREFIX}/api/xiapan/paper-trade`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ticker: top.ticker,
+        title: top.title ?? top.ticker,
+        side: top.buy_side === "yes" ? "yes" : "no",
+        qty,
+        entry_price_c: top.buy_price_c,
+        cost_dollars: cost,
+        source: "agent_laohu",
+        picks_score: top.score,
+        reasons: top.reasons,
+      }),
+      signal: AbortSignal.timeout(8000),
+    });
+  } catch {
+    // 静默 · 风控拦截或网络挂都不影响老虎主流
   }
 }
 
