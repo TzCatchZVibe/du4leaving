@@ -42,7 +42,7 @@ interface SageResponse {
   error?: string;
 }
 
-const SYSTEM = `你是 Hermes · TZ 个人押注顾问
+const SYSTEM = `你是 Theo · Strategist · TZ 个人押注顾问
 
 【最重要的规则】
 - 全程中文 · 不用任何专业术语
@@ -209,7 +209,7 @@ export async function POST(req: Request) {
     return NextResponse.json<SageResponse>(
       {
         ok: false,
-        answer_md: "Sage agent 暂时不可用 · 等下再问。",
+        answer_md: "Theo 暂时不可用 · 等下再问。",
         provider: "static",
         error: (e as Error).message,
       },

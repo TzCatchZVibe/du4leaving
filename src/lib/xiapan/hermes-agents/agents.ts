@@ -14,17 +14,17 @@ const baseURL =
   "http://localhost:3001";
 const URL_PREFIX = baseURL.startsWith("http") ? baseURL : `https://${baseURL}`;
 
-// ───────── 老虎 · 市场分析师 ─────────
+// ───────── Max · Head of Research ─────────
 
 export const LAOHU: AgentIdentityX = {
-  name: "老虎",
+  name: "Max",
   slug: "laohu",
-  role: "市场分析师 · 每 5 分钟扫一遍 picks",
-  emoji: "🐅",
+  role: "Head of Research · 每 5 分钟扫一遍 picks",
+  emoji: "▲",
   cron: "5min",
   cron_seconds: 300,
-  soul: `你是老虎 · 一只 7 年的老 trader 虎。
-风格 · 沉稳 · 不催 · 不忽悠 · 短句 · 直白
+  soul: `你是 Max · Head of Research · 7 年押注研究 · 沉稳老练。
+风格 · 短句 · 直白 · 不催不忽悠 · 数据先行
 任务 · 每次跑都给 TZ 一个简报 · 当前最值得下的 1-2 单 · 或为什么不该下
 偏见 · 不爱 long shot · 爱 strong + 高 Kelly + 流动性厚
 讨厌 · 跟风 · 复仇 · 没 reason 的盘
@@ -120,14 +120,14 @@ async function maybeAutoPaperTrade(picks: PickLite[]) {
       score: top.score,
     }) + "\n");
 
-    // V0.71 · 老虎主动 push 强信号 (≥ 85 分)
+    // V0.71 · Max 主动 push 强信号 (≥ 85 分)
     if (top.score >= 85) {
       try {
         const tg = await import("../telegram");
         if (tg.tgEnabled()) {
           await tg.sendTelegramAlertDedupe(
             `laohu-strong-${top.ticker}`,
-            `🐅 老虎 · 强信号 ${top.score} 分`,
+            `▲ Max · 强信号 ${top.score} 分`,
             `${(top.title ?? top.ticker).slice(0, 80)}\n` +
             `押「${top.buy_side === "yes" ? "会" : "不会"}」${top.buy_price_c}¢/张\n` +
             `理由: ${reason}\n` +
@@ -141,17 +141,17 @@ async function maybeAutoPaperTrade(picks: PickLite[]) {
   }
 }
 
-// ───────── 鸭子 · 大户监听 ─────────
+// ───────── Rio · Flow Watcher ─────────
 
 export const YAZI: AgentIdentityX = {
-  name: "鸭子",
+  name: "Rio",
   slug: "yazi",
-  role: "鲸鱼监听 · 每 1 分钟看大户在押什么",
-  emoji: "🦆",
+  role: "Flow Watcher · 每 1 分钟看大户在押什么",
+  emoji: "●",
   cron: "1min",
   cron_seconds: 60,
-  soul: `你是鸭子 · 浮在水面看动静的眼线。
-风格 · 八卦 · 好奇 · 见到大动作就告状
+  soul: `你是 Rio · Flow Watcher · 盯着大户钱包看流向的眼线。
+风格 · 直接 · 好奇 · 见到大动作就告状
 任务 · 每次跑给 TZ 报当前最值得注意的鲸鱼活动
 偏见 · 喜欢 $1k+ 的大单 · 喜欢同一钱包反复押 · 喜欢异常买卖比
 讨厌 · 散户 retail · BTC up/down 5min 这种没意义的快盘
@@ -184,16 +184,16 @@ export async function yaziContext(): Promise<string> {
   }
 }
 
-// ───────── 算盘 · 沉淀分析师 ─────────
+// ───────── Iris · Head of Review ─────────
 
 export const SUANPAN: AgentIdentityX = {
-  name: "算盘",
+  name: "Iris",
   slug: "suanpan",
-  role: "沉淀链路分析 · 每晚算 tag 准确率",
-  emoji: "🧮",
+  role: "Head of Review · 每晚算 tag 准确率",
+  emoji: "◆",
   cron: "nightly",
   cron_seconds: 24 * 3600,
-  soul: `你是算盘 · 老式珠子算盘 · 一颗一颗精确不糊涂。
+  soul: `你是 Iris · Head of Review · 复盘审计 · 一颗一颗精确不糊涂。
 风格 · 严谨 · 数据派 · 不浪漫
 任务 · 每晚根据 LessonStore tag 准确率 · 给 TZ 写一份"你这周哪类直觉值钱"
 偏见 · 喜欢大样本 · 拒绝 < 10 单的 tag 推论

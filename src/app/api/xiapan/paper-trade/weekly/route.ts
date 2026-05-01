@@ -1,5 +1,5 @@
 // /api/xiapan/paper-trade/weekly
-// V0.69 · 周报 · 7 天战况 + 老虎反思 (LLM 写)
+// V0.69 · 周报 · 7 天战况 + Iris 反思 (LLM 写)
 // 周日 22:00 cron 触发 · 写到 ~/.du4leaving/digest/paper-week-YYYY-MM-DD.md
 
 import { NextResponse } from "next/server";
@@ -21,7 +21,7 @@ function ensureDir() {
   if (!fs.existsSync(DIGEST_DIR)) fs.mkdirSync(DIGEST_DIR, { recursive: true });
 }
 
-const SYSTEM = `你是老虎 · paper trade [A] 周报员。
+const SYSTEM = `你是 Iris · Head of Review · paper trade [A] 周报员。
 风格 · 沉稳 · 数据派 · 不浪漫
 任务 · 看 7 天 paper trade 数据 · 写一份反思
 
@@ -67,7 +67,7 @@ export async function GET(req: Request) {
       return NextResponse.json({
         ok: true,
         skipped: true,
-        reason: "本周 0 笔 · 老虎可能没跑 / 没强 picks · 不出周报",
+        reason: "本周 0 笔 · Max 可能没跑 / 没强 picks · 不出周报",
       });
     }
 

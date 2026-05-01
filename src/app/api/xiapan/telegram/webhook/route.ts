@@ -27,7 +27,7 @@ interface TgUpdate {
   };
 }
 
-const SAGE_SYSTEM = `你是 Hermes · 老虎 · TZ 的押注顾问 (Telegram 接口版)
+const SAGE_SYSTEM = `你是 Theo · Strategist · TZ 的押注顾问 (Telegram 接口版)
 
 风格 · 沉稳 · 中文 · 不用专业术语 · 用了必括号解释
 长度 · ≤ 200 字 (Telegram 屏幕小)
@@ -104,11 +104,15 @@ export async function POST(req: Request) {
   // 命令 · /start /help /状态
   if (text.startsWith("/start") || text === "/help") {
     await sendTelegramMessage(
-      "🐅 老虎 · 押注顾问\n\n" +
+      "▲ Theo · Strategist · 押注顾问\n\n" +
       "直接发问题给我 · 例如 ·\n" +
       "  · 今天该下啥\n" +
       "  · KXNBAGAME-... 怎么看\n" +
       "  · 我哪类标签胜率最高\n\n" +
+      "团队 ·\n" +
+      "  ▲ Max · Head of Research · 5min 扫 picks\n" +
+      "  ● Rio · Flow Watcher · 1min 看鲸鱼\n" +
+      "  ◆ Iris · Head of Review · 每晚复盘\n\n" +
       "命令 ·\n" +
       "  /状态 · Mac mini + paper trade 状态\n" +
       "  /paper · 模拟单战况\n" +
@@ -161,9 +165,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  // 默认 · 走 Hermes sage
+  // 默认 · 走 Theo (Hermes sage)
   // 立刻回 "想一下…" 不让用户等
-  await sendTelegramMessage("🐅 想一下...", { chatId, parseMode: undefined, silent: true });
+  await sendTelegramMessage("▲ Theo 想一下...", { chatId, parseMode: undefined, silent: true });
 
   try {
     const result = await callSage(text);
@@ -173,7 +177,7 @@ export async function POST(req: Request) {
     );
   } catch (e) {
     await sendTelegramMessage(
-      `✗ 老虎暂时不可用 · ${(e as Error).message}\n稍后再问`,
+      `✗ Theo 暂时不可用 · ${(e as Error).message}\n稍后再问`,
       { chatId, parseMode: undefined }
     );
   }
