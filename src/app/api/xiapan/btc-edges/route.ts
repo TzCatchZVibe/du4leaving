@@ -274,10 +274,76 @@ export async function GET() {
     });
   }
 
+  // ─────────────── 跨期限套利信号 (第二 BTC 信源) ───────────────
+  //
+  // 数学约束 · 同 strike · T 越长 P(yes) 越接近 0.5 (vol 加大)
+  //   if (sigma > 0): T1 < T2 ∧ K > spot → fairP(T1) < fairP(T2) (call OTM 单调)
+  //                   T1 < T2 ∧ K < spot → fairP(T1) > fairP(T2) (call ITM)
+  //   市场违约 · 套利
+  //
+  // 简化版 · 找同 strike 不同到期 · 检查 fair 跟市场单调性是否对齐
+  const crossTenorSignals: Signal[] = [];
+  const byStrike = new Map<string, BtcEdge[]>();
+  for (const e of edges) {
+    if (e.side !== "above") continue;       // 仅处理 above
+    const k = `${e.strike}-${e.side}`;
+    const arr = byStrike.get(k) ?? [];
+    arr.push(e);
+    byStrike.set(k, arr);
+  }
+
+  for (const [, group] of byStrike) {
+    if (group.length < 2) continue;
+    // 按 T 排序
+    group.sort((a, b) => a.T_years - b.T_years);
+    // 检查市场 P 单调性
+    for (let i = 1; i < group.length; i++) {
+      const a = group[i - 1];
+      const b = group[i];
+      const isOTM = a.strike > spot;
+      const expectedMonotone = isOTM ? "ascending" : "descending";
+      const violated =
+        (expectedMonotone === "ascending" && a.market_p > b.market_p + 0.03) ||
+        (expectedMonotone === "descending" && a.market_p < b.market_p - 0.03);
+      if (!violated) continue;
+      // 哪头被错价 · 公允价反推
+      const buyTarget = expectedMonotone === "ascending" ? b : a; // 应贵的一边便宜
+      const direction: 1 | -1 = buyTarget.market_p < buyTarget.fair_p ? 1 : -1;
+      crossTenorSignals.push({
+        source: "btc-cross-tenor",
+        ticker: buyTarget.ticker,
+        direction,
+        predicted_p: buyTarget.fair_p,
+        confidence: 0.62,
+        reason: `跨期限错配 · ${a.series} ${a.market_p.toFixed(2)} vs ${b.series} ${b.market_p.toFixed(2)} 同 strike $${a.strike}`,
+        ts: new Date().toISOString(),
+        data: {
+          partner_ticker: (buyTarget === a ? b : a).ticker,
+          spot,
+          strike: a.strike,
+        },
+      });
+    }
+  }
+
+  // 把跨期限信号挂到对应 edge 上
+  for (const s of crossTenorSignals) {
+    const e = edges.find((x) => x.ticker === s.ticker);
+    if (e) {
+      // 同 ticker 上累加 · fusion 自然会读两个
+      // (我们已有 e.signal 是 BS · 这里再产一个是跨期限 · 都进 signals 列表)
+    }
+  }
+
   // 排序 · |edge_pp| 降
   edges.sort((a, b) => Math.abs(b.edge_pp) - Math.abs(a.edge_pp));
 
-  const signalCount = edges.filter((e) => e.signal !== null).length;
+  const allSignals = [
+    ...edges.filter((e) => e.signal !== null).map((e) => e.signal!),
+    ...crossTenorSignals,
+  ];
+
+  const signalCount = edges.filter((e) => e.signal !== null).length + crossTenorSignals.length;
 
   return NextResponse.json({
     ok: true,
@@ -287,8 +353,10 @@ export async function GET() {
       sigma_30d: sigma,
       total_markets: edges.length,
       signal_count: signalCount,
+      bs_signals: edges.filter((e) => e.signal !== null).length,
+      cross_tenor_signals: crossTenorSignals.length,
     },
     edges: edges.slice(0, 30),
-    signals: edges.filter((e) => e.signal !== null).map((e) => e.signal),
+    signals: allSignals,
   });
 }

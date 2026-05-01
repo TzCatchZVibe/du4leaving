@@ -90,3 +90,9 @@ fi
 if (( minute % 5 == 0 )); then
   ping_one "/api/xiapan/btc-edges" "[5min] btc-edges"
 fi
+
+# V0.72 · 每 5 分钟 · 百川主入口 (signals → fusion → paper)
+# 注 · 必须在 btc-edges 之后跑 · 让信号源先就位 · 错开 1 min
+if (( minute % 5 == 1 )); then
+  ping_one "/api/xiapan/百川/run?cron=1" "[5min] 百川-run"
+fi
