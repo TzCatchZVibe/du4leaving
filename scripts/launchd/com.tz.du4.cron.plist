@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  V0.68 · 本地 cron · 每分钟跑一次 local-cron-runner.sh
+  脚本内自己判 minute % 5 / minute % 10 / hour 决定调哪个 endpoint
+
+  装 ·
+    bash scripts/launchd/install-cron.sh
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.tz.du4.cron</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/laoxia/du4leaving/scripts/local-cron-runner.sh</string>
+  </array>
+
+  <key>StartInterval</key>
+  <integer>60</integer>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/du4-cron.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/du4-cron.err</string>
+</dict>
+</plist>
