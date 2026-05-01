@@ -114,13 +114,16 @@ export async function POST(req: Request) {
       "  ● Rio · Flow Watcher · 1min 看鲸鱼\n" +
       "  ◆ Iris · Head of Review · 每晚复盘\n\n" +
       "命令 ·\n" +
-      "  /状态  · Mac mini + paper trade 状态\n" +
+      "  /状态   · Mac mini + paper trade 状态\n" +
       "  /paper  · 模拟单战况\n" +
       "  /digest · 今日早间简报\n" +
-      "  /max   · 看 Max 最新简报\n" +
-      "  /rio   · 看 Rio 最新鲸鱼报\n" +
-      "  /iris  · 看 Iris 最新复盘\n" +
-      "  /team  · 三人最新各一段\n" +
+      "  /pools  · 百川两池余额 (P0/S/C)\n" +
+      "  /pools_init <$> · 初始化两池\n" +
+      "  /btc    · BTC BS 公允价 top 5\n" +
+      "  /max    · Max 最新简报\n" +
+      "  /rio    · Rio 最新鲸鱼报\n" +
+      "  /iris   · Iris 最新复盘\n" +
+      "  /team   · 三人各一段\n" +
       "  /tickers · 当前 top picks",
       { chatId, parseMode: undefined }
     );
@@ -164,6 +167,104 @@ export async function POST(req: Request) {
     try {
       const r = await fetch("http://localhost:3001/api/xiapan/intel/digest").then(r => r.json());
       await sendTelegramMessage(r.digest_md ?? "无简报", { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // V0.72 · /pools · 百川两池状态
+  if (text === "/pools") {
+    try {
+      const r = await fetch("http://localhost:3001/api/xiapan/百川/pools").then(r => r.json());
+      if (!r.initialized) {
+        await sendTelegramMessage(
+          "△ 百川两池未初始化\n\n命令 ·\n  /pools_init 400  (注入本金 $400 起步)",
+          { chatId, parseMode: undefined }
+        );
+        return NextResponse.json({ ok: true });
+      }
+      const s = r.state;
+      const total = s.S.balance + s.C.balance;
+      const lines = [
+        `◆ 百川两池`,
+        ``,
+        `本金 P0   · $${s.P0.toFixed(2)} (红线)`,
+        `S 池稳赚 · $${s.S.balance.toFixed(2)}  (peak $${s.S.peak.toFixed(2)})`,
+        `C 池凸性 · $${s.C.balance.toFixed(2)}  (open ${s.C.open_trades} 单)`,
+        `─────────`,
+        `总计      · $${total.toFixed(2)}  (vs P0 ${((total / s.P0 - 1) * 100).toFixed(1)}%)`,
+        ``,
+        `历史 cashout:  $${s.lifetime.total_cashout.toFixed(2)}`,
+        `历史 reinvest: $${s.lifetime.total_reinvest.toFixed(2)}`,
+        `状态: ${s.circuit_state}` + (s.circuit_reason ? ` (${s.circuit_reason})` : ""),
+      ];
+      await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // V0.72 · /pools_init <amount> · 初始化
+  if (text.startsWith("/pools_init")) {
+    const parts = text.split(/\s+/);
+    const amount = parseFloat(parts[1] || "0");
+    if (!amount || amount <= 0) {
+      await sendTelegramMessage(
+        "用法 · /pools_init 400\n\n注入本金 $400 起步 · 90% 进 S · 10% 进 C\n仅首次有效 · 初始化后不能改",
+        { chatId, parseMode: undefined }
+      );
+      return NextResponse.json({ ok: true });
+    }
+    try {
+      const r = await fetch("http://localhost:3001/api/xiapan/百川/pools", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ P0: amount }),
+      }).then(r => r.json());
+      if (r.ok) {
+        await sendTelegramMessage(
+          `◆ 百川初始化完成\n` +
+          `P0 · $${r.state.P0.toFixed(2)}\n` +
+          `S 池 · $${r.state.S.balance.toFixed(2)} (90%)\n` +
+          `C 池 · $${r.state.C.balance.toFixed(2)} (10%)\n` +
+          `\n等 W1 BS 信号源跑起 · S 池开始下单`,
+          { chatId, parseMode: undefined }
+        );
+      } else {
+        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
+      }
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // V0.72 · /btc · 当前 BS 公允价偏差 top 5
+  if (text === "/btc") {
+    try {
+      const r = await fetch("http://localhost:3001/api/xiapan/btc-edges").then(r => r.json());
+      if (!r.ok) {
+        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const lines = [
+        `◆ BTC BS 公允价 vs Kalshi`,
+        ``,
+        `spot $${r.summary.spot.toFixed(0)} · σ_30d ${(r.summary.sigma_30d * 100).toFixed(0)}%`,
+        `${r.summary.signal_count} 个信号 / ${r.summary.total_markets} 市场`,
+        ``,
+      ];
+      const top5 = r.edges.slice(0, 5);
+      for (const e of top5) {
+        const sign = e.edge_pp >= 0 ? "+" : "";
+        lines.push(
+          `${e.signal ? "★" : "·"} ${e.series} ${e.side} $${e.strike}  T=${e.T_hours.toFixed(1)}h\n` +
+          `   公允 ${(e.fair_p * 100).toFixed(0)}% vs 市场 ${(e.market_p * 100).toFixed(0)}%  edge ${sign}${e.edge_pp.toFixed(1)}pp  vol $${e.vol_24.toFixed(0)}`
+        );
+      }
+      await sendTelegramMessage(lines.join("\n\n"), { chatId, parseMode: undefined });
     } catch (e) {
       await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
     }

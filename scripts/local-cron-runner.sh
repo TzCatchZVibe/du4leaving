@@ -79,3 +79,14 @@ dow=$(date +%w)   # 0 = Sunday
 if (( dow == 0 && hour == 22 && minute == 0 )); then
   ping_one "/api/xiapan/paper-trade/weekly?cron=1" "[Sun 22:00] paper-weekly"
 fi
+
+# V0.72 · 每月 1 号 02:00 · 百川两池月度结算
+day=$(date +%d)
+if [[ "$day" == "01" && "$hour" == "02" && "$minute" == "00" ]]; then
+  ping_one "/api/xiapan/百川/allocate?cron=1" "[Month 1] 百川-allocate"
+fi
+
+# V0.72 · 每 5 分钟 · BTC BS 公允价扫 (W1 信号源)
+if (( minute % 5 == 0 )); then
+  ping_one "/api/xiapan/btc-edges" "[5min] btc-edges"
+fi
