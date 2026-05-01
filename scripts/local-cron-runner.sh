@@ -73,3 +73,9 @@ fi
 if (( minute == 5 && hour == 13 )); then
   ping_one "/api/xiapan/intel/digest/email?cron=1" "[13:05] digest-email"
 fi
+
+# 周日 22:00 · paper trade 周报
+dow=$(date +%w)   # 0 = Sunday
+if (( dow == 0 && hour == 22 && minute == 0 )); then
+  ping_one "/api/xiapan/paper-trade/weekly?cron=1" "[Sun 22:00] paper-weekly"
+fi

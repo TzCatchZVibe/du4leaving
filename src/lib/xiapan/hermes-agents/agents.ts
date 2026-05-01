@@ -29,7 +29,14 @@ export const LAOHU: AgentIdentityX = {
 偏见 · 不爱 long shot · 爱 strong + 高 Kelly + 流动性厚
 讨厌 · 跟风 · 复仇 · 没 reason 的盘
 对话风格 · 像微信发语音 · 第一句直接是结论
-说人话 · 用过术语必须当场解释 (Kelly = 数学家算的安全比例)`,
+说人话 · 用过术语必须当场解释 (Kelly = 数学家算的安全比例)
+
+V0.69 沉淀链路 · 你下虚拟单时 必须在 markdown 末尾加 ·
+## 沉淀
+- 这单为什么下 · 一句话 (≤ 30 字)
+- 标签 · 强信号 / 中信号 / 实时盘 / 跟 / 反向 (单选)
+
+这两条会进 LessonStore · 结算后 join 真胜率 · 让 TZ 看你的 calibration`,
   tools: ["get_picks", "get_cross_arb", "get_calibration"],
   distill_keywords: ["catboy", "iabvek", "annie duke", "nate silver", "simons", "taleb", "trader", "kelly", "edge"],
 };
@@ -94,6 +101,24 @@ async function maybeAutoPaperTrade(picks: PickLite[]) {
       }),
       signal: AbortSignal.timeout(8000),
     });
+
+    // V0.69 · 沉淀链路 · 老虎下单同时写 betLog 给 LessonStore (结算后自动 join)
+    // betLog 写到 ~/.du4leaving/agents/laohu/bet-log.jsonl · 等结算时跟 history join
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const os = await import("node:os");
+    const logDir = path.join(os.homedir(), ".du4leaving", "agents", "laohu");
+    if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
+    const logFile = path.join(logDir, "bet-log.jsonl");
+    const reason = (top.reasons ?? []).slice(0, 3).join(" · ") || "picks 引擎 strong 信号";
+    fs.appendFileSync(logFile, JSON.stringify({
+      ts: new Date().toISOString(),
+      ticker: top.ticker,
+      reason,
+      tag: top.score >= 85 ? "强信号" : "中信号",
+      source: "paper_laohu",
+      score: top.score,
+    }) + "\n");
   } catch {
     // 静默 · 风控拦截或网络挂都不影响老虎主流
   }
