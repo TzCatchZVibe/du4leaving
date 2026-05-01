@@ -74,9 +74,13 @@ interface PickLite {
 
 /// V0.67 · 老虎跑时如果有 score ≥ 75 picks · 自动模拟下单
 /// 风控由 paper-trade endpoint 内部 canPlaceTrade 校验
+///
+/// V0.72 · 暂停 auto-paper · MIN_SCORE 改 99 (实际拒下) ·
+/// 等百川引擎 fusion.ts 上线 · 用 n_active ≥ 2 + edge ≥ 5pp 替代旧 score
+/// 旧 score 基于假 Elo modelP=0.5 · 全是噪声 · 不能继续累垃圾数据
 async function maybeAutoPaperTrade(picks: PickLite[]) {
   const PAPER_PER_TRADE = 2;          // $2/单
-  const MIN_SCORE = 75;
+  const MIN_SCORE = 99;               // V0.72 · 暂停 (旧 picks 假信号 · 等 fusion 上)
   const top = picks.find((p) => p.score >= MIN_SCORE && p.buy_price_c > 0 && p.buy_price_c < 95);
   if (!top) return;
 
