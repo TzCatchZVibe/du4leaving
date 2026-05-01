@@ -170,6 +170,30 @@ export async function fetchMarketPrice(ticker: string): Promise<{ yes_bid: numbe
   }
 }
 
+/// V0.71 · 平仓后顺手推 Telegram (动态 import 避免循环依赖)
+async function notifyTelegramClose(t: PaperTrade) {
+  try {
+    const tg = await import("./telegram");
+    if (!tg.tgEnabled()) return;
+    const pnl = t.pnl_dollars ?? 0;
+    const icon = pnl >= 0 ? "✓" : "△";
+    const reasonLabel: Record<string, string> = {
+      take_profit: "止盈",
+      stop_loss: "止损",
+      time_exit: "时限",
+      settled: "结算",
+    };
+    const r = reasonLabel[t.exit_reason ?? ""] ?? t.exit_reason ?? "";
+    await tg.sendTelegramAlertDedupe(
+      `paper-close-${t.id}`,
+      `${icon} 模拟单 ${r} · ${pnl >= 0 ? "+" : ""}$${pnl.toFixed(2)}`,
+      `${t.title.slice(0, 80)}\n${t.side.toUpperCase()} ×${t.qty} @ ${t.entry_price_c}¢ → ${t.exit_price_c}¢`
+    );
+  } catch {
+    // 静默
+  }
+}
+
 /// 跑一遍 mark-to-market · 自动平止盈/止损/时限
 /// 返回新关闭的单
 export async function tickAllOpenTrades(): Promise<PaperTrade[]> {
@@ -217,6 +241,9 @@ export async function tickAllOpenTrades(): Promise<PaperTrade[]> {
     // 重写 jsonl (替换原行)
     rewriteUpdated(t, updated);
     closed.push(updated);
+
+    // V0.71 · 推 Telegram (异步 · 不阻塞)
+    notifyTelegramClose(updated).catch(() => {});
   }
 
   return closed;

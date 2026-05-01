@@ -119,6 +119,23 @@ async function maybeAutoPaperTrade(picks: PickLite[]) {
       source: "paper_laohu",
       score: top.score,
     }) + "\n");
+
+    // V0.71 · 老虎主动 push 强信号 (≥ 85 分)
+    if (top.score >= 85) {
+      try {
+        const tg = await import("../telegram");
+        if (tg.tgEnabled()) {
+          await tg.sendTelegramAlertDedupe(
+            `laohu-strong-${top.ticker}`,
+            `🐅 老虎 · 强信号 ${top.score} 分`,
+            `${(top.title ?? top.ticker).slice(0, 80)}\n` +
+            `押「${top.buy_side === "yes" ? "会" : "不会"}」${top.buy_price_c}¢/张\n` +
+            `理由: ${reason}\n` +
+            `(已模拟下 ${qty} 张 · $${cost.toFixed(2)})`
+          );
+        }
+      } catch {}
+    }
   } catch {
     // 静默 · 风控拦截或网络挂都不影响老虎主流
   }

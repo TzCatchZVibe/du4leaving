@@ -157,6 +157,21 @@ export async function GET(req: Request) {
       return a.age_minutes - b.age_minutes;
     });
 
+    // V0.71 · high urgency push Telegram (仅近 30min · 防历史回灌)
+    try {
+      const tg = await import("@/lib/xiapan/telegram");
+      if (tg.tgEnabled()) {
+        for (const s of items.filter((i) => i.urgency === "high" && i.age_minutes < 30).slice(0, 3)) {
+          await tg.sendTelegramAlertDedupe(
+            `yn-${s.message_id}`,
+            `⚠ YN ${s.platforms.join("/").toUpperCase() || "PM"} · ${s.age_minutes}min`,
+            `${s.text.slice(0, 280)}` +
+            (s.tickers.length > 0 ? `\n标的: ${s.tickers.join(" · ")}` : "")
+          );
+        }
+      }
+    } catch { /* 静默 */ }
+
     return NextResponse.json({
       ok: true,
       generatedAt: new Date().toISOString(),

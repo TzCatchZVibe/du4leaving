@@ -1,0 +1,193 @@
+// /api/xiapan/telegram/webhook
+// V0.71 · Telegram bot 入口 · 你发文字给 bot → 走 Hermes sage → 回你
+//
+// 设置 ·
+//   1. .env.local · TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID + TELEGRAM_WEBHOOK_SECRET
+//   2. 暴露给 Telegram (Tailscale 不行 · TG 要从公网访问) ·
+//      a) ngrok http 3001 · 拿 https URL
+//      b) 或部署到 Vercel/Cloudflare · 用其域名
+//   3. 注册 webhook ·
+//      curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=<URL>/api/xiapan/telegram/webhook&secret_token=<SECRET>"
+//   4. 测 · TG 发消息 给 bot · 应自动收到回复
+
+import { NextResponse } from "next/server";
+import { sendTelegramMessage, tgEnabled } from "@/lib/xiapan/telegram";
+import { chat } from "@/lib/xiapan/llm";
+import { buildToolsDescription, parseToolCalls, executeTool } from "@/lib/xiapan/hermes-tools";
+
+export const dynamic = "force-dynamic";
+export const maxDuration = 90;
+
+interface TgUpdate {
+  message?: {
+    message_id?: number;
+    from?: { id?: number; username?: string; first_name?: string };
+    chat?: { id?: number };
+    text?: string;
+  };
+}
+
+const SAGE_SYSTEM = `你是 Hermes · 老虎 · TZ 的押注顾问 (Telegram 接口版)
+
+风格 · 沉稳 · 中文 · 不用专业术语 · 用了必括号解释
+长度 · ≤ 200 字 (Telegram 屏幕小)
+
+回答结构 (必须严格 markdown · 跨平台简洁) ·
+
+## 决策
+干 / 不干 / 等等 (一句话)
+
+## 理由
+2-3 条 · 引数据
+
+## 仓位
+具体百分比 + 美元 · 如 "押 3% = $30 / 50 张"
+
+像 7 年老 trader 给学徒发语音 · 不催 · 不忽悠`;
+
+async function callSage(question: string): Promise<{ text: string; provider: string }> {
+  const toolsDesc = buildToolsDescription();
+  const augmented = `${SAGE_SYSTEM}\n\n${toolsDesc}`;
+  let currentPrompt = question;
+  let last = { text: "", provider: "static" };
+
+  // 多回合 · 最多 3 跳
+  for (let hop = 0; hop < 3; hop++) {
+    const r = await chat({
+      system: augmented,
+      user: currentPrompt,
+      jsonOutput: false,
+      temperature: 0.3,
+    });
+    last = { text: r.text, provider: r.provider };
+    const { toolCalls, rawAnswer } = parseToolCalls(r.text);
+    if (!toolCalls || toolCalls.length === 0 || hop === 2) {
+      last.text = rawAnswer || r.text;
+      break;
+    }
+    const results = await Promise.all(toolCalls.slice(0, 3).map(executeTool));
+    currentPrompt = question + "\n\n【工具结果】\n" +
+      results.map(rr => `· ${rr.name}: ${rr.error ? "ERR" : JSON.stringify(rr.result).slice(0, 600)}`).join("\n") +
+      "\n\n基于工具数据 · 直接 markdown 答。";
+  }
+  return last;
+}
+
+export async function POST(req: Request) {
+  // 验 secret · TG setWebhook 时配的 secret_token 会塞 header
+  const expected = process.env.TELEGRAM_WEBHOOK_SECRET;
+  if (expected) {
+    const got = req.headers.get("x-telegram-bot-api-secret-token") ?? "";
+    if (got !== expected) {
+      return NextResponse.json({ ok: false, error: "bad secret" }, { status: 401 });
+    }
+  }
+
+  let update: TgUpdate;
+  try { update = (await req.json()) as TgUpdate; }
+  catch { return NextResponse.json({ ok: true, skipped: "bad json" }); }
+
+  const msg = update.message;
+  if (!msg || !msg.text || !msg.chat?.id) {
+    return NextResponse.json({ ok: true, skipped: "no message" });
+  }
+
+  // 鉴权 · 只回 TELEGRAM_CHAT_ID
+  const allowedChatId = process.env.TELEGRAM_CHAT_ID;
+  if (allowedChatId && String(msg.chat.id) !== allowedChatId) {
+    return NextResponse.json({ ok: true, skipped: "unauthorized chat" });
+  }
+
+  const text = msg.text.trim();
+  const chatId = String(msg.chat.id);
+
+  // 命令 · /start /help /状态
+  if (text.startsWith("/start") || text === "/help") {
+    await sendTelegramMessage(
+      "🐅 老虎 · 押注顾问\n\n" +
+      "直接发问题给我 · 例如 ·\n" +
+      "  · 今天该下啥\n" +
+      "  · KXNBAGAME-... 怎么看\n" +
+      "  · 我哪类标签胜率最高\n\n" +
+      "命令 ·\n" +
+      "  /状态 · Mac mini + paper trade 状态\n" +
+      "  /paper · 模拟单战况\n" +
+      "  /digest · 今日早间简报",
+      { chatId, parseMode: undefined }
+    );
+    return NextResponse.json({ ok: true });
+  }
+
+  if (text === "/状态" || text === "/status") {
+    try {
+      const r = await fetch("http://localhost:3001/api/xiapan/mac-mini-status").then(r => r.json());
+      const body =
+        `Mac mini · ${r.hostname}\n` +
+        `· uptime ${Math.round(r.uptime_minutes / 60)}h\n` +
+        `· CPU ${Math.round(r.cpu_pct)}% · RAM ${r.ram_used_gb}/${r.ram_total_gb} GB\n` +
+        `· Hermes ${r.hermes_loaded ? "✓" : "✗"} (${r.last_inference_ms ?? "?"}ms)\n` +
+        `· Next.js ${r.agent_logs?.next_dev_running ? "✓" : "✗"} · Cron ${r.agent_logs?.cron_running ? "✓" : "✗"}`;
+      await sendTelegramMessage(body, { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ 拉状态失败 · ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  if (text === "/paper") {
+    try {
+      const r = await fetch("http://localhost:3001/api/xiapan/paper-trade?days=7").then(r => r.json());
+      const s = r.summary;
+      const body =
+        `◧ 模拟挂单 · 7 天\n` +
+        `· 总 ${s.total} · 持仓 ${s.open} · 平 ${s.closed}\n` +
+        `· 赢 ${s.wins} / 输 ${s.losses} · 胜率 ${Math.round(s.win_rate * 100)}%\n` +
+        `· PnL ${s.total_pnl >= 0 ? "+" : ""}$${s.total_pnl}\n\n` +
+        `进 [B] 真单 · 还差 ${Math.max(0, 100 - s.total)} 笔`;
+      await sendTelegramMessage(body, { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  if (text === "/digest") {
+    try {
+      const r = await fetch("http://localhost:3001/api/xiapan/intel/digest").then(r => r.json());
+      await sendTelegramMessage(r.digest_md ?? "无简报", { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // 默认 · 走 Hermes sage
+  // 立刻回 "想一下…" 不让用户等
+  await sendTelegramMessage("🐅 想一下...", { chatId, parseMode: undefined, silent: true });
+
+  try {
+    const result = await callSage(text);
+    await sendTelegramMessage(
+      `${result.text}\n\n— 用 ${result.provider}`,
+      { chatId, parseMode: undefined }
+    );
+  } catch (e) {
+    await sendTelegramMessage(
+      `✗ 老虎暂时不可用 · ${(e as Error).message}\n稍后再问`,
+      { chatId, parseMode: undefined }
+    );
+  }
+
+  return NextResponse.json({ ok: true });
+}
+
+// 健康检查 (浏览器手测)
+export async function GET() {
+  return NextResponse.json({
+    ok: true,
+    enabled: tgEnabled(),
+    instruction: tgEnabled()
+      ? "POST 这个 URL · 走 webhook"
+      : "缺 TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID 在 .env.local",
+  });
+}

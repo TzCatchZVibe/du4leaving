@@ -227,6 +227,30 @@ export async function GET(req: Request) {
       closed: diffs.filter((d) => d.kind === "closed").length,
     };
 
+    // V0.71 · 大额变动 push Telegram
+    try {
+      const tg = await import("@/lib/xiapan/telegram");
+      if (tg.tgEnabled()) {
+        for (const d of diffs.slice(0, 5)) {
+          const big =
+            (d.kind === "new" && d.value_now >= 2000) ||
+            (d.kind === "scaled_up" && Math.abs(d.size_delta * d.cur_price) >= 2000) ||
+            (d.kind === "closed" && Math.abs(d.size_before * d.cur_price) >= 3000);
+          if (!big) continue;
+          const kindLabel: Record<string, string> = {
+            new: "🆕 新仓", scaled_up: "⬆ 加仓",
+            scaled_down: "⬇ 减仓", closed: "✕ 平仓",
+          };
+          await tg.sendTelegramAlertDedupe(
+            `whale-${d.wallet.slice(0, 8)}-${d.market.slice(0, 30)}-${d.kind}`,
+            `${kindLabel[d.kind] ?? d.kind} · ${d.display_name}`,
+            `${d.market.slice(0, 80)}\n押 ${d.outcome} · ${d.size_delta >= 0 ? "+" : ""}${Math.round(d.size_delta)} 张` +
+            (d.value_now > 0 ? ` · 当前 $${Math.round(d.value_now)}` : "")
+          );
+        }
+      }
+    } catch { /* 静默 */ }
+
     return NextResponse.json({
       ok: true,
       generatedAt: new Date().toISOString(),
