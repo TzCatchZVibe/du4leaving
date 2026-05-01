@@ -114,9 +114,14 @@ export async function POST(req: Request) {
       "  ● Rio · Flow Watcher · 1min 看鲸鱼\n" +
       "  ◆ Iris · Head of Review · 每晚复盘\n\n" +
       "命令 ·\n" +
-      "  /状态 · Mac mini + paper trade 状态\n" +
-      "  /paper · 模拟单战况\n" +
-      "  /digest · 今日早间简报",
+      "  /状态  · Mac mini + paper trade 状态\n" +
+      "  /paper  · 模拟单战况\n" +
+      "  /digest · 今日早间简报\n" +
+      "  /max   · 看 Max 最新简报\n" +
+      "  /rio   · 看 Rio 最新鲸鱼报\n" +
+      "  /iris  · 看 Iris 最新复盘\n" +
+      "  /team  · 三人最新各一段\n" +
+      "  /tickers · 当前 top picks",
       { chatId, parseMode: undefined }
     );
     return NextResponse.json({ ok: true });
@@ -159,6 +164,84 @@ export async function POST(req: Request) {
     try {
       const r = await fetch("http://localhost:3001/api/xiapan/intel/digest").then(r => r.json());
       await sendTelegramMessage(r.digest_md ?? "无简报", { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // /max /rio /iris · 看某 agent 最新一段 daily 输出
+  const agentMap: Record<string, { slug: string; emoji: string; title: string }> = {
+    "/max":  { slug: "laohu",   emoji: "▲", title: "Max · Head of Research" },
+    "/rio":  { slug: "yazi",    emoji: "●", title: "Rio · Flow Watcher" },
+    "/iris": { slug: "suanpan", emoji: "◆", title: "Iris · Head of Review" },
+  };
+  if (agentMap[text]) {
+    const a = agentMap[text];
+    try {
+      const r = await fetch(`http://localhost:3001/api/xiapan/agents/daily?slug=${a.slug}&limit=1`).then(r => r.json());
+      const latest = r.recent_outputs?.[0];
+      if (!latest) {
+        await sendTelegramMessage(`${a.emoji} ${a.title}\n\n还没跑过 · 等下次 cron`, { chatId, parseMode: undefined });
+      } else {
+        await sendTelegramMessage(
+          `${a.emoji} ${a.title}\n${latest.ranAt}\n\n${latest.output_md.slice(0, 2500)}`,
+          { chatId, parseMode: undefined }
+        );
+      }
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  if (text === "/team") {
+    try {
+      const slugs = ["laohu", "yazi", "suanpan"] as const;
+      const labels: Record<typeof slugs[number], string> = {
+        laohu:   "▲ Max · Research",
+        yazi:    "● Rio · Flow",
+        suanpan: "◆ Iris · Review",
+      };
+      const all = await Promise.all(
+        slugs.map((s) =>
+          fetch(`http://localhost:3001/api/xiapan/agents/daily?slug=${s}&limit=1`)
+            .then(r => r.json())
+            .catch(() => null)
+        )
+      );
+      const parts: string[] = [];
+      for (let i = 0; i < slugs.length; i++) {
+        const slug = slugs[i];
+        const r = all[i];
+        const latest = r?.recent_outputs?.[0];
+        parts.push(`【${labels[slug]}】 ${latest?.ranAt ?? "—"}`);
+        parts.push(latest ? latest.output_md.slice(0, 600) : "(还没跑过)");
+        parts.push("");
+      }
+      await sendTelegramMessage(parts.join("\n"), { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  if (text === "/tickers") {
+    try {
+      const r = await fetch("http://localhost:3001/api/xiapan/picks?min=45&limit=8").then(r => r.json());
+      const picks = r.picks ?? [];
+      if (picks.length === 0) {
+        await sendTelegramMessage("◯ 当前没强 picks · 都不到 45 分", { chatId, parseMode: undefined });
+      } else {
+        const lines = picks.slice(0, 8).map((p: { score: number; ticker: string; title?: string; buy_side: string; buy_price_c: number; reasons?: string[] }) =>
+          `${p.score >= 75 ? "★" : p.score >= 55 ? "·" : "○"} ${p.score}分  \`${p.ticker.slice(0, 28)}\`\n   押「${p.buy_side === "yes" ? "会" : "不会"}」${p.buy_price_c}¢` +
+          (p.title ? ` · ${p.title.slice(0, 50)}` : "")
+        );
+        await sendTelegramMessage(
+          `◉ Top picks · 当前\n\n${lines.join("\n\n")}`,
+          { chatId, parseMode: undefined }
+        );
+      }
     } catch (e) {
       await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
     }
