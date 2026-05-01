@@ -1,0 +1,77 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# testing
+/coverage
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# misc
+.DS_Store
+*.pem
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# env files (can opt-in for committing if needed)
+.env*
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# xiapan probe data (148MB+ Kalshi/Riot snapshots · don't commit)
+.xiapan-probe/
+
+# ============================================================
+# czv-os 私人 / 内部红线 · public repo 永不入库
+# ============================================================
+
+# P0 私人 · TZ 私会录音 + transcript + 9 维分析
+.claude/knowledge/meetings/
+*.m4a
+*.wav
+*.mp3
+
+# P1 内部 · 客户战略 / 商务谈判 / 财务 / 升职路径
+.claude/knowledge/outreach/
+.claude/knowledge/playbooks/hg-*
+.claude/knowledge/playbooks/da-ren-bd-*
+.claude/knowledge/playbooks/czv-tz-*
+.claude/knowledge/brand-specs/
+
+# P1 蒸馏 · 含真人 thinking pattern (Sarah 等)
+.claude/skills/sarah-perspective/
+
+# P1 草拟 · Glimboo 未发布
+src/data/recipes/glimboo-brainstorm/
+
+# P1 retro · czv 内部 sprint 反思 (含战略细节)
+# 注: Sprint 0-15 技术 retro 可独立放 docs/blog/ 公开
+.claude/knowledge/retro/sprint-1[6-9]-*.md
+.claude/knowledge/retro/sprint-2*-*.md
+.claude/knowledge/retro/audit-stakeholder-perception.md
+
+# P1 czv-ceo runtime 状态 (本地 only)
+.claude/knowledge/RULES.md
+

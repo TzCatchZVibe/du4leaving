@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  V0.64 · macOS launchd 服务 · 开机自启 du4 agent-runner
+
+  安装 (一次)·
+    cp scripts/launchd/com.tz.du4.agent-runner.plist ~/Library/LaunchAgents/
+    launchctl load -w ~/Library/LaunchAgents/com.tz.du4.agent-runner.plist
+
+  停 / 重启 ·
+    launchctl unload ~/Library/LaunchAgents/com.tz.du4.agent-runner.plist
+    launchctl load -w ~/Library/LaunchAgents/com.tz.du4.agent-runner.plist
+
+  看日志 ·
+    tail -f /tmp/du4-agent-runner.log
+    tail -f /tmp/du4-agent-runner.err
+
+  修改前必须 unload · 改完 load · 不然不生效
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.tz.du4.agent-runner</string>
+
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/bin/env</string>
+    <string>node</string>
+    <string>/Users/happyglobal_tk_team/catchzvibe/scripts/du4-agent-runner.mjs</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/Users/happyglobal_tk_team/catchzvibe</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>DU4_BASE_URL</key>
+    <string>http://localhost:3001</string>
+  </dict>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <dict>
+    <key>SuccessfulExit</key>
+    <false/>
+    <key>NetworkState</key>
+    <true/>
+  </dict>
+
+  <key>ThrottleInterval</key>
+  <integer>30</integer>
+
+  <key>StandardOutPath</key>
+  <string>/tmp/du4-agent-runner.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/du4-agent-runner.err</string>
+</dict>
+</plist>

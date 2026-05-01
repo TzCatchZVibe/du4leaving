@@ -1,0 +1,441 @@
+@import "tailwindcss";
+
+@theme inline {
+  /* 构成主义 · MUJI × Rodchenko */
+  --color-paper: #f1ebdc;        /* 暖纸色 · 米基底 */
+  --color-paper-bright: #f7f2e6; /* 高光纸 */
+  --color-paper-deep: #e8dfc7;   /* 阴影纸 */
+  --color-ink: #111111;          /* 墨黑 · 主文字 */
+  --color-ink-soft: #2a2a2a;     /* 次文字 */
+  --color-ink-dim: #6a6052;      /* 弱文字 */
+  --color-red: #c1272d;          /* Rodchenko 红 · 主 accent */
+  --color-red-deep: #8a1c22;
+  --color-amber: #d89937;        /* 琥珀 · 次 accent */
+  --color-sage: #6a8a6e;         /* 鼠尾草 · 点缀 */
+
+  --font-display: var(--font-display);
+  --font-serif: var(--font-serif);
+  --font-mono: var(--font-mono);
+  --font-cjk: var(--font-cjk);
+}
+
+body {
+  font-feature-settings: "kern", "liga", "calt";
+}
+
+/* 构成主义装饰元素 · utility classes */
+.bar-red {
+  background: var(--color-red);
+}
+
+.bar-ink {
+  background: var(--color-ink);
+}
+
+.diag-divider {
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--color-ink) 20%,
+    var(--color-ink) 80%,
+    transparent
+  );
+}
+
+.diag-stripe {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--color-red) 0,
+    var(--color-red) 4px,
+    transparent 4px,
+    transparent 12px
+  );
+}
+
+.grid-paper {
+  background-image:
+    linear-gradient(var(--color-paper-deep) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-paper-deep) 1px, transparent 1px);
+  background-size: 32px 32px;
+  opacity: 0.2;
+}
+
+@keyframes rotate-slow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.rotate-slow {
+  animation: rotate-slow 60s linear infinite;
+}
+
+/* ═══════════════════════════════════════════════════════════
+ * CIV 6 RPG TOKENS · /internal/intel
+ * 文明 6 风 RPG 面板 · 色/字/尺寸/材质
+ * 说明 · 与 MUJI×Rodchenko 色板独立 · 只在 intel 页用
+ * ═══════════════════════════════════════════════════════════ */
+
+:root {
+  /* 色板 · 从 Civ 6 截图采样 · 12 色锁死 */
+  --civ-gold:          #c9a961;
+  --civ-gold-dark:     #8b7339;
+  --civ-gold-hi:       #e8c878;
+  --civ-steel:         #3c5a7a;
+  --civ-steel-hi:      #5a7a9a;
+  --civ-night:         #1e2a3a;
+  --civ-night-deep:    #11171f;
+  --civ-parchment:     #d9c8a3;
+  --civ-parchment-dk:  #a89770;
+  --civ-ink:           #1a1410;
+  --civ-warm-white:    #f4ecd8;
+  --civ-war-red:       #8b2e2e;
+  --civ-war-red-hi:    #c24a4a;
+  --civ-science-cyan:  #4a7a8b;
+  --civ-faith-violet:  #6a4a7a;
+
+  /* 尺寸 */
+  --civ-hud-h-top:     56px;
+  --civ-hud-h-bottom:  56px;
+  --civ-panel-w-left:  260px;
+  --civ-panel-w-right: 280px;
+  --civ-hex-r:         44px;
+
+  /* 边框阴影 */
+  --civ-border-gold:   1px solid var(--civ-gold);
+  --civ-border-emboss: 2px solid var(--civ-gold-dark);
+  --civ-shadow-inset:  inset 0 1px 0 var(--civ-gold-hi), inset 0 -1px 0 var(--civ-gold-dark);
+  --civ-shadow-scroll: 0 4px 12px rgba(0,0,0,.3), 0 0 0 1px var(--civ-parchment-dk);
+}
+
+/* 金属条 · 顶/底 HUD 骨架 · 钢蓝渐变 + 金线 */
+.civ-metal-bar {
+  background:
+    linear-gradient(180deg, var(--civ-night) 0%, var(--civ-night-deep) 100%);
+  border-top: 1px solid var(--civ-gold);
+  border-bottom: 1px solid var(--civ-gold-dark);
+  box-shadow: var(--civ-shadow-inset);
+}
+
+/* 金属条上的凹槽铆钉 */
+.civ-rivet {
+  display: inline-block;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, var(--civ-gold-hi), var(--civ-gold-dark));
+  box-shadow: 0 1px 0 rgba(0,0,0,.5), inset 0 0 2px rgba(0,0,0,.5);
+}
+
+/* 圆形浮雕徽章 · 所有资源/topic 图标通用 */
+.civ-emboss {
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 30%,
+      var(--civ-gold-hi) 0%,
+      var(--civ-gold) 45%,
+      var(--civ-gold-dark) 100%);
+  border: 1px solid var(--civ-gold-dark);
+  box-shadow:
+    0 1px 2px rgba(0,0,0,.4),
+    inset 0 1px 1px rgba(255,230,180,.5),
+    inset 0 -1px 1px rgba(0,0,0,.3);
+}
+
+/* 羊皮纸卷轴背景 · 通知/对话 */
+.civ-parchment {
+  background:
+    linear-gradient(180deg,
+      var(--civ-parchment) 0%,
+      color-mix(in srgb, var(--civ-parchment) 90%, var(--civ-parchment-dk)) 100%);
+  border: 1px solid var(--civ-parchment-dk);
+  box-shadow: var(--civ-shadow-scroll);
+  color: var(--civ-ink);
+}
+
+/* 科技青 / 战争红 / 信仰紫 · 通知色带 */
+.civ-tag-science { background: var(--civ-science-cyan); color: var(--civ-warm-white); }
+.civ-tag-war     { background: var(--civ-war-red);     color: var(--civ-warm-white); }
+.civ-tag-faith   { background: var(--civ-faith-violet);color: var(--civ-warm-white); }
+
+/* End Day 宝石按钮 · 蓝紫宝石 + 金环 */
+.civ-gem-button {
+  background:
+    radial-gradient(circle at 35% 30%,
+      var(--civ-steel-hi) 0%,
+      var(--civ-steel) 45%,
+      var(--civ-night) 100%);
+  border: 2px solid var(--civ-gold);
+  box-shadow:
+    0 2px 6px rgba(0,0,0,.5),
+    inset 0 1px 2px rgba(255,255,255,.3),
+    inset 0 -2px 3px rgba(0,0,0,.4),
+    0 0 12px rgba(201,169,97,.25);
+  color: var(--civ-warm-white);
+  text-shadow: 0 1px 0 rgba(0,0,0,.6);
+}
+.civ-gem-button:hover {
+  box-shadow:
+    0 2px 10px rgba(0,0,0,.5),
+    inset 0 1px 2px rgba(255,255,255,.4),
+    inset 0 -2px 3px rgba(0,0,0,.4),
+    0 0 24px rgba(232,200,120,.5);
+}
+
+/* 脉冲小红点 · is_new 标记 */
+@keyframes civ-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(193,39,45,.7); }
+  50%      { box-shadow: 0 0 0 6px rgba(193,39,45,0);  }
+}
+.civ-pulse-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--civ-war-red-hi);
+  animation: civ-pulse 1.8s ease-out infinite;
+}
+
+/* 卷轴展开 · 通知进入 */
+@keyframes civ-unroll {
+  from { transform: scaleY(0); opacity: 0; transform-origin: top; }
+  to   { transform: scaleY(1); opacity: 1; }
+}
+.civ-unroll { animation: civ-unroll .28s cubic-bezier(.2,.9,.3,1.2); transform-origin: top; }
+
+/* 六边形 hex tile · 基础样式 · 真 SVG 路径在组件里画 */
+.civ-hex {
+  transition: transform .15s ease, filter .15s ease;
+  cursor: pointer;
+}
+.civ-hex:hover  { transform: scale(1.08); filter: drop-shadow(0 0 4px var(--civ-gold-hi)); }
+.civ-hex[data-selected="true"] { filter: drop-shadow(0 0 8px var(--civ-gold-hi)); }
+
+/* Civ 排版 · 标题 / 数字 / 正文 */
+.civ-title   { font-family: var(--font-serif), "Cormorant Garamond", serif; font-weight: 600; letter-spacing: .02em; }
+.civ-num     { font-family: var(--font-display), "Inter", sans-serif; font-weight: 700; font-variant-numeric: tabular-nums; }
+.civ-mono    { font-family: var(--font-mono), "JetBrains Mono", monospace; letter-spacing: .1em; }
+.civ-body    { font-family: var(--font-cjk), "Noto Sans", system-ui; }
+
+/* ═══════════════════════════════════════════════════════════
+ * INTEL v4 · Bloomberg 暗色终端 · 真地图 + Civ 心法
+ * /internal/intel · 播客人每日 PR+新闻工作台
+ * ═══════════════════════════════════════════════════════════ */
+
+:root {
+  /* v9 · Sims 亮色 + 可交互世界地图 · 全亮 */
+  --intel-bg-0:       #faf4e8;   /* 主底 · 极浅暖米 · 比 v8 更亮 */
+  --intel-bg-1:       #f1e9d7;   /* 次底 · 卡片/面板 */
+  --intel-bg-2:       #ebe0ca;   /* hover · 微暖 */
+  --intel-bg-3:       #dccfad;   /* 深分层 · 分割块 */
+  --intel-border:     #c4b697;   /* 柔金分割线 */
+  --intel-border-hi:  #a89770;   /* 强金描边 */
+
+  /* 地图专用亮色 */
+  --map-ocean:        #e3eef3;   /* 海洋 · 极浅蓝 */
+  --map-land:         #ede3ce;   /* 陆地 · 暖米 */
+  --map-land-hover:   #e3d6b9;   /* hover */
+  --map-land-active:  #d6c598;   /* 选中 */
+  --map-border:       #8b7339;   /* 国界线 · 金铜 */
+  --map-border-hi:    #5a4424;   /* 国界强调 */
+  --map-city-dim:     #7a6a4a;   /* 城市小点 */
+  --map-label:        #3a2d20;   /* 地图文字 */
+
+  /* 文字 · 墨色为主 */
+  --intel-text-hi:    #1a1410;   /* 主文字 · 深墨 */
+  --intel-text:       #3a2d20;   /* 次文字 · 咖啡褐 */
+  --intel-text-dim:   #6a5840;   /* 弱文字 · 老纸 */
+  --intel-text-muted: #a89770;   /* 灰化 · 已读 */
+
+  /* 状态色 */
+  --intel-alert:      #8b2e2e;   /* MUJI 红 · HOOK/重要 */
+  --intel-data:       #3c5a7a;   /* 钢蓝 · 数据/链接 */
+  --intel-up:         #6a8a6e;   /* 鼠尾草 · 积极 */
+  --intel-down:       #c97a1e;   /* 战旗橙 · 警告 */
+  --intel-neutral:    #8b7339;   /* 古铜 · 中性 */
+  --intel-gold:       #c9a961;   /* 金铜 · 强调 */
+
+  /* Sims 风圆角 · 大弧 */
+  --sims-radius-sm:   8px;
+  --sims-radius:      14px;
+  --sims-radius-lg:   20px;
+  --sims-radius-xl:   28px;
+  --sims-radius-full: 9999px;
+
+  /* Sims 风柔影 · 浮起感 */
+  --sims-shadow-sm:   0 2px 6px rgba(26,20,16,.06), 0 1px 2px rgba(26,20,16,.04);
+  --sims-shadow:      0 4px 14px rgba(26,20,16,.10), 0 2px 4px rgba(26,20,16,.06);
+  --sims-shadow-lg:   0 12px 32px rgba(26,20,16,.14), 0 4px 12px rgba(26,20,16,.08);
+  --sims-shadow-pop:  0 20px 48px rgba(26,20,16,.20), 0 8px 16px rgba(26,20,16,.10);
+
+  /* Sims 风内描边 · 白亮感 */
+  --sims-inner-hi:    inset 0 1px 0 rgba(255,255,255,.8);
+
+  /* v15 · 字体升级 · 中文标题用 Noto Serif SC · 更雅 */
+  --font-title-cjk:   var(--font-serif-cjk, "Noto Serif SC"), "Songti SC", serif;
+
+  /* 11 馆色 · MUJI 暖色系 · 降饱和避免刺眼 */
+  --topic-politics:       #8b2e2e;
+  --topic-economy:        #c9a961;
+  --topic-tech:           #3c5a7a;
+  --topic-philosophy:     #6a4a7a;
+  --topic-literature:     #8b6a39;
+  --topic-society:        #6a8a6e;
+  --topic-entertainment:  #b84a7a;
+  --topic-music:          #4a7a8b;
+  --topic-photography:    #3a3428;
+  --topic-esports:        #c97a1e;
+  --topic-console:        #5a3c7a;
+
+  /* 归档仪式色 · 仅 End Day */
+  --archive-parchment: #d9c8a3;
+  --archive-ink:       #1a1410;
+  --archive-gold:      #c9a961;
+}
+
+/* Bloomberg 状态色高亮 · alert/data/up/down */
+.intel-alert { color: var(--intel-alert); }
+.intel-data  { color: var(--intel-data); }
+.intel-up    { color: var(--intel-up); }
+.intel-down  { color: var(--intel-down); }
+
+/* 暗色终端面板 · 可复用 */
+.intel-panel {
+  background: var(--intel-bg-1);
+  border: 1px solid var(--intel-border);
+}
+.intel-panel-deep {
+  background: var(--intel-bg-0);
+  border: 1px solid var(--intel-border);
+}
+
+/* 数字 tabular · 用在 HUD / Feed 时间戳 */
+.intel-num   { font-family: var(--font-display), "Inter", sans-serif; font-variant-numeric: tabular-nums; font-weight: 600; }
+.intel-mono  { font-family: var(--font-mono), "JetBrains Mono", monospace; letter-spacing: .08em; }
+
+/* ─── v19 · 三层手写字体体系 · TZ "OS / 地图 / 新闻 三层 都手写但分明" ───
+ * .ui-os    框架感   ZCOOL XiaoWei      工整楷书
+ * .ui-map   题字感   Liu Jian Mao Cao   毛笔飘逸
+ * .ui-news  表达感   Ma Shan Zheng      粗壮书法
+ */
+.ui-os {
+  font-family: var(--font-handwrite-os), "ZCOOL XiaoWei", var(--font-cjk), system-ui, sans-serif;
+  letter-spacing: .04em;
+}
+.ui-map {
+  /* v19 · 霞鹜文楷 · TZ 选的字样 · 高可读手工楷体 */
+  font-family: "LXGW WenKai Screen", "LXGW WenKai", "KaiTi", "STKaiti", var(--font-cjk), serif;
+  letter-spacing: .04em;
+}
+.ui-news {
+  font-family: var(--font-handwrite-content), "Ma Shan Zheng", var(--font-cjk), serif;
+  letter-spacing: .02em;
+}
+.ui-accent {
+  font-family: var(--font-handwrite-accent), "Long Cang", var(--font-cjk), serif;
+  letter-spacing: .04em;
+}
+
+/* v18 · 整体纸纹背景 · 细腻装饰感 · TZ '界面太素' */
+.intel-paper-texture {
+  background-image:
+    radial-gradient(circle at 25% 30%, rgba(201,169,97,.04) 0, transparent 50%),
+    radial-gradient(circle at 75% 70%, rgba(139,46,46,.03) 0, transparent 50%),
+    repeating-linear-gradient(
+      45deg,
+      rgba(139,115,57,.015) 0 1px,
+      transparent 1px 12px
+    );
+}
+
+/* v18 · Sims 边角装饰 · 四角小花纹 · 当容器 class */
+.intel-corner-dots::before,
+.intel-corner-dots::after {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--intel-gold, #c9a961);
+  opacity: .35;
+}
+.intel-corner-dots::before {
+  top: 6px;
+  left: 6px;
+  box-shadow: 8px 0 0 var(--intel-gold, #c9a961);
+}
+.intel-corner-dots::after {
+  bottom: 6px;
+  right: 6px;
+  box-shadow: -8px 0 0 var(--intel-gold, #c9a961);
+}
+
+/* v18 · hover 微抬 · 全站通用 */
+.intel-hover-lift {
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+.intel-hover-lift:hover {
+  transform: translateY(-1.5px);
+}
+
+/* 发光 pin · 24h is_new */
+@keyframes intel-pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 0 currentColor; opacity: 1; }
+  50%      { box-shadow: 0 0 0 6px transparent; opacity: .4; }
+}
+.intel-pulse { animation: intel-pulse-dot 1.8s ease-out infinite; }
+
+/* End Day 发光按钮 (晚间加强) */
+@keyframes intel-end-day-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255,149,0,0); }
+  50%      { box-shadow: 0 0 20px 4px rgba(255,149,0,.35); }
+}
+.intel-end-day-evening { animation: intel-end-day-glow 2.4s ease-in-out infinite; }
+
+/* 地图 · 国界 + 悬停 · 通过组件内联 style 也可 · 这里仅备用 */
+.intel-map-svg path {
+  transition: fill .15s ease, stroke .15s ease;
+}
+
+/* ─── Dossier v9 · 2×2 报纸版面 ─────────────────────
+ * 柔化滚动条 · Phase 2 placeholder 进度条 · 窄屏降级
+ */
+.dossier-v9-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--intel-border-hi) transparent;
+}
+.dossier-v9-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.dossier-v9-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.dossier-v9-scroll::-webkit-scrollbar-thumb {
+  background: var(--intel-border);
+  border-radius: 3px;
+}
+.dossier-v9-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--intel-border-hi);
+}
+
+/* Phase 2 进度条呼吸 */
+@keyframes dossier-v9-progress-breathe {
+  0%, 100% { opacity: .7; transform: scaleX(1); }
+  50%      { opacity: 1;  transform: scaleX(1.05); }
+}
+.dossier-v9-progress-animate {
+  animation: dossier-v9-progress-breathe 1.8s ease-in-out infinite;
+  transform-origin: left center;
+}
+
+/* 窄屏降级 · <900px 2×2 塌成单列竖滚 */
+@media (max-width: 900px) {
+  .dossier-v9-modal {
+    width: 96vw !important;
+    height: 92vh !important;
+    max-height: 92vh !important;
+  }
+  .dossier-v9-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: none !important;
+    grid-auto-rows: minmax(180px, auto) !important;
+  }
+}

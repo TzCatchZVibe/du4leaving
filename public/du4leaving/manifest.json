@@ -1,0 +1,52 @@
+{
+  "name": "DU4LEAVING",
+  "short_name": "DU4",
+  "description": "Kalshi 价值投注助手 · 找便宜单 · 観戦 · 一击",
+  "start_url": "/xiapan",
+  "scope": "/xiapan",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f1ebdc",
+  "theme_color": "#111111",
+  "lang": "zh-CN",
+  "categories": ["finance", "sports", "utilities"],
+  "icons": [
+    {
+      "src": "/du4leaving/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/du4leaving/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/du4leaving/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/du4leaving/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "影院模式",
+      "short_name": "影院",
+      "description": "4 路视频 + 紧凑 edge",
+      "url": "/xiapan?mode=cinema"
+    },
+    {
+      "name": "浮窗模式",
+      "short_name": "浮窗",
+      "url": "/xiapan/overlay"
+    }
+  ]
+}

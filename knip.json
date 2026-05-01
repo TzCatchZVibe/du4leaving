@@ -1,0 +1,24 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "src/app/**/{page,layout,route,error,loading,not-found}.{ts,tsx,js,jsx}",
+    "src/middleware.ts",
+    "next.config.ts"
+  ],
+  "project": [
+    "src/**/*.{ts,tsx,js,jsx}"
+  ],
+  "ignore": [
+    "scripts/**",
+    "public/**",
+    "supabase/migrations/**",
+    "tests/**",
+    "playwright.config.ts"
+  ],
+  "ignoreDependencies": [
+    "class-variance-authority",
+    "clsx",
+    "tailwind-merge"
+  ],
+  "ignoreExportsUsedInFile": true
+}
