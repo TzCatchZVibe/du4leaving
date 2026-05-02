@@ -36,6 +36,7 @@ const DEFAULT_WEIGHTS: Record<string, number> = {
   "mention-engine": 1.0,
   "contrarian": 1.0,
   "nba-elo": 1.0,
+  "fed-cross-platform": 1.0,
 };
 
 function ensureDir() {

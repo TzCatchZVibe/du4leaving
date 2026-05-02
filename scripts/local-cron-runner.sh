@@ -137,6 +137,11 @@ if (( minute % 30 == 0 )); then
   ping_one "/api/xiapan/nba-edges" "[30min] nba-edges"
 fi
 
+# V0.72 W3 Day 4 · 每 30 分钟 · 经济跨平台 (FOMC/CPI/Jobs/GDP)
+if (( minute % 30 == 15 )); then
+  ping_one "/api/xiapan/fed-edges" "[30min] fed-edges"
+fi
+
 # V0.72 W3 · 每周一 04:00 · 538 Elo refresh
 if [[ "$dow" == "1" && "$hour" == "04" && "$minute" == "00" ]]; then
   ping_one "/api/xiapan/nba-edges?refresh=1" "[Mon 04:00] nba-elo-refresh"

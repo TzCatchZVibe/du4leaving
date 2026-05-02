@@ -128,6 +128,7 @@ export async function POST(req: Request) {
       "  /weather · 天气 NWS+Meteo 双源 top 5\n" +
       "  /nba     · NBA Elo (538 数据)\n" +
       "  /nba_refresh · 拉新 538 Elo (周更)\n" +
+      "  /fed     · 经济 FOMC/CPI/Jobs/GDP 跨平台\n" +
       "  /settle  · 拉 Kalshi 已结算 + update PnL\n" +
       "  /brier   · 看信号权重 + Brier 校准\n" +
       "  /health  · 百川全链路健康检查\n" +
@@ -391,6 +392,35 @@ export async function POST(req: Request) {
         `· PnL ${sign}$${s.total_pnl.toFixed(2)}`,
         { chatId, parseMode: undefined }
       );
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // V0.72 W3 · /fed · 经济跨平台 (FOMC/CPI/Jobs/GDP)
+  if (text === "/fed" || text === "/economic") {
+    try {
+      const r = await fetch("http://localhost:3001/api/xiapan/fed-edges").then(r => r.json());
+      if (!r.ok) {
+        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const lines = [
+        `◆ 经济 · Kalshi vs Polymarket`,
+        ``,
+        `Kalshi ${r.summary.total_kalshi} · Poly ${r.summary.poly_total} · 配对 ${r.summary.matched} · 信号 ${r.summary.signals}`,
+        ``,
+      ];
+      for (const e of r.edges.slice(0, 6)) {
+        const sign = e.edge_pp >= 0 ? "+" : "";
+        const cat = e.category.toUpperCase();
+        lines.push(
+          `${e.signal ? "★" : "·"} [${cat}] ${(e.title ?? e.ticker).slice(0, 50)}\n` +
+          `   Kalshi ${(e.market_p * 100).toFixed(0)}% vs Poly ${e.poly_match ? (e.poly_match.yes_p * 100).toFixed(0) + "%" : "—"} · ${sign}${e.edge_pp.toFixed(1)}pp`
+        );
+      }
+      await sendTelegramMessage(lines.join("\n\n"), { chatId, parseMode: undefined });
     } catch (e) {
       await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
     }
