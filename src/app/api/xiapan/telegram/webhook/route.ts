@@ -124,6 +124,7 @@ export async function POST(req: Request) {
       "  /sol     · SOL 同上\n" +
       "  /fda     · FDA AdCom 凸性信号 (C 池)\n" +
       "  /mention · 名人发言错价 (C 池)\n" +
+      "  /contrarian · 反公众信号 (全品类通用)\n" +
       "  /weather · 天气 NWS+Meteo 双源 top 5\n" +
       "  /settle  · 拉 Kalshi 已结算 + update PnL\n" +
       "  /brier   · 看信号权重 + Brier 校准\n" +
@@ -386,6 +387,33 @@ export async function POST(req: Request) {
         lines.push(
           `${star} ${e.parsed.city} ${e.parsed.type} ≥${e.parsed.threshold} (${e.parsed.date})\n` +
           `   市场 ${(e.market_p * 100).toFixed(0)}% · NWS ${nwsEdge} · Meteo ${meteoEdge}`
+        );
+      }
+      await sendTelegramMessage(lines.join("\n\n"), { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // V0.72 W2 · /contrarian · 反公众信号 top
+  if (text === "/contrarian" || text === "/反向") {
+    try {
+      const r = await fetch("http://localhost:3001/api/xiapan/contrarian-edges").then(r => r.json());
+      if (!r.ok) {
+        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const lines = [
+        `◆ 反公众信号 (Walters / Thaler 派)`,
+        ``,
+        `扫 ${r.summary.total_scanned} · 有 skew ${r.summary.with_skew} · 信号 ${r.summary.signals}`,
+        ``,
+      ];
+      for (const s of r.signals.slice(0, 8)) {
+        const dir = s.direction === 1 ? "押会" : "押不会";
+        lines.push(
+          `★ ${s.ticker.slice(0, 35)}\n   ${dir} (${(s.predicted_p * 100).toFixed(0)}%) · ${s.reason}`
         );
       }
       await sendTelegramMessage(lines.join("\n\n"), { chatId, parseMode: undefined });

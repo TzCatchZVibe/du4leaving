@@ -119,6 +119,12 @@ if (( minute % 20 == 0 )); then
   ping_one "/api/xiapan/mention-edges" "[20min] mention-edges"
 fi
 
+# V0.72 W2 Day 6 · 每 10 分钟 · 反公众 (vol skew · 全品类通用)
+# 高频 · trades feed 实时 · 抓 mean reversion 窗
+if (( minute % 10 == 5 )); then
+  ping_one "/api/xiapan/contrarian-edges" "[10min] contrarian"
+fi
+
 # V0.72 · 每 15 分钟 · 天气 NWS+Meteo (W1 Day 5 信号源)
 # 天气 forecast 更新慢 · 不需要 5min · 减 API 压力
 if (( minute % 15 == 0 )); then
