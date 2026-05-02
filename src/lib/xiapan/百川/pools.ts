@@ -84,9 +84,10 @@ export function writePools(state: PoolsState): void {
 }
 
 /// 初始化 · 仅首次调用 · 后续幂等
-export function initPools(P0: number): PoolsState {
+/// V0.72 W3 Day 8 · 加 force=true · 真钱切换时重置
+export function initPools(P0: number, force = false): PoolsState {
   const existing = readPools();
-  if (existing) return existing;
+  if (existing && !force) return existing;
 
   const now = new Date().toISOString();
   const s_init = P0 * STARTING_S_PCT;

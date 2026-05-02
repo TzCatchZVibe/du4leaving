@@ -290,6 +290,37 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
+  // V0.72 W3 Day 8 · /pools_reset <amount> · 强制重置 (真钱切换用)
+  if (text.startsWith("/pools_reset")) {
+    const parts = text.split(/\s+/);
+    const amount = parseFloat(parts[1] || "0");
+    if (!amount || amount <= 0) {
+      await sendTelegramMessage(
+        "用法 · /pools_reset 50\n\n⚠ 重置 · 清 lessons + 重起 P0\n仅在切换 paper → 真钱 时用\n确认后发 · /pools_reset 50",
+        { chatId, parseMode: undefined }
+      );
+      return NextResponse.json({ ok: true });
+    }
+    try {
+      const r = await fetch("http://localhost:3001/api/xiapan/baichuan/pools", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ P0: amount, reset: true }),
+      }).then(r => r.json());
+      if (r.ok) {
+        await sendTelegramMessage(
+          `✓ 重置完成\nP0 · $${r.state.P0.toFixed(2)}\nS 池 · $${r.state.S.balance.toFixed(2)} (90%)\nC 池 · $${r.state.C.balance.toFixed(2)} (10%)\n\n⚠ 旧 paper 历史已抛弃 (lessons.jsonl 保留供回看)`,
+          { chatId, parseMode: undefined }
+        );
+      } else {
+        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
+      }
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
   // V0.72 · /pools_init <amount> · 初始化
   if (text.startsWith("/pools_init")) {
     const parts = text.split(/\s+/);

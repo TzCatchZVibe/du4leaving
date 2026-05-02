@@ -23,7 +23,7 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  let body: { P0?: number };
+  let body: { P0?: number; reset?: boolean };
   try {
     body = await req.json();
   } catch {
@@ -35,6 +35,7 @@ export async function POST(req: Request) {
       { status: 400 }
     );
   }
-  const state = initPools(body.P0);
+  // V0.72 W3 Day 8 · reset=true 强制重置 (真钱切换用 · 清 paper 历史)
+  const state = initPools(body.P0, body.reset === true);
   return NextResponse.json({ ok: true, state });
 }
