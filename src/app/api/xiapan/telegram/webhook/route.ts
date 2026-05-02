@@ -101,32 +101,22 @@ export async function POST(req: Request) {
   const text = msg.text.trim();
   const chatId = String(msg.chat.id);
 
-  // V0.72 W3 Day 8 · 砍 24 → 3 命令 · ADHD + 利润优化
-  // 旧 21 命令保留路径 (backward compat) · 但不在 /帮 文档
+  // V0.72 W3 Day 11 · Telegram 降级到 SMS · 游戏在 macOS app
   if (text.startsWith("/start") || text === "/help" || text === "/帮") {
     await sendTelegramMessage(
-      "百川 · 3 命令搞定\n" +
-      "─────────────────────\n\n" +
-      "/钱   一屏看 · 30 秒结束\n" +
-      "      P0 / S 池 / C 池 / 今日 / 最近 5 笔\n\n" +
-      "/信号 你想看时 · top 5 候选\n" +
-      "      ★ 已下 / · 待触发 / ✕ 跳过\n\n" +
-      "/事   有啥要你动手\n" +
-      "      没事说 \"今天没事\"\n" +
-      "      有就 1-3 条 (init / RSA / cashout)\n\n" +
-      "─────────────────────\n" +
-      "紧急 · 我会自动 push 你 ·\n" +
-      "  · 熔断触发\n" +
-      "  · 第一笔真单成功\n" +
-      "  · 月底分钱报告\n" +
-      "  · 系统异常\n\n" +
-      "进阶 (你想看时) ·\n" +
-      "  /今日 · 9:30 setup 卡 (BG3 风格)\n" +
-      "  /同伴 · 4 同伴 approval (Max/Rio/Iris/Theo)\n" +
-      "  /策略 · 看 15 策略实时分配\n" +
-      "  /训   · ML 自进化训练 (周日 23:00 自动)\n\n" +
-      "其他 21 旧命令仍能用 · 但建议忘掉\n" +
-      "(/btc /eth /sol /weather /fda 等都还在 · 但 /钱 /信号 已包含)",
+      "百川 · 紧急短信通道\n" +
+      "─────────────────\n\n" +
+      "Telegram 不是游戏 · 是 SMS\n" +
+      "游戏面板在 Mac app · 打开 Du4Leaving 看\n\n" +
+      "Telegram 唯一一个命令 ·\n" +
+      "  /钱   出门时一眼瞥 (P0/S/C/今日)\n\n" +
+      "我自动 push 你 (仅紧急 · 别的全静默) ·\n" +
+      "  🚨 熔断触发 (账户异常)\n" +
+      "  🚨 第一笔真单成功\n" +
+      "  🚨 月底分钱报告\n" +
+      "  🚨 系统挂掉\n\n" +
+      "其他 25+ 旧命令 · 仍能用 · 但建议忘\n" +
+      "回到 Mac · 打开 Du4Leaving · 那是游戏",
       { chatId, parseMode: undefined }
     );
     return NextResponse.json({ ok: true });
