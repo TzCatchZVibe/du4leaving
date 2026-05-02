@@ -136,6 +136,7 @@ export async function POST(req: Request) {
       "  /clv     · CLV 跟踪 (策略真假的金标准)\n" +
       "  /review [days]  · 综合表现 + 各 source 归因 (默认 30 天)\n" +
       "  /backtest [days] · 网格搜参 · 找最优阈值\n" +
+      "  /tutorial [page] · 手机教程 8 页 (单页 · /tutorial 1)\n" +
       "  /max    · Max 最新简报\n" +
       "  /rio    · Rio 最新鲸鱼报\n" +
       "  /iris   · Iris 最新复盘\n" +
@@ -250,6 +251,28 @@ export async function POST(req: Request) {
         );
       } else {
         await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
+      }
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // V0.72 W3 Day 7 · /tutorial · 推手机使用教程 (8 页 · 图文)
+  if (text === "/tutorial" || text.startsWith("/tutorial")) {
+    const parts = text.split(/\s+/);
+    const page = parts[1];
+    try {
+      const url = page
+        ? `http://localhost:3001/api/xiapan/baichuan/tutorial?chat_id=${chatId}&page=${page}`
+        : `http://localhost:3001/api/xiapan/baichuan/tutorial?chat_id=${chatId}`;
+      const r = await fetch(url, { signal: AbortSignal.timeout(60_000) }).then(r => r.json());
+      if (!r.ok) {
+        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
+      } else if (page) {
+        // 单页 · 已发送 · 不再 ack
+      } else {
+        await sendTelegramMessage(`✓ 教程已推送 (${r.sent} 页)`, { chatId, parseMode: undefined });
       }
     } catch (e) {
       await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });

@@ -275,12 +275,12 @@ export async function GET() {
         const strikeMatch = q.match(/\$?(\d{1,3}(?:,\d{3})*(?:\.\d+)?)/);
         if (!strikeMatch) continue;
         const polyStrike = parseFloat(strikeMatch[1].replace(/,/g, ""));
-        if (Math.abs(polyStrike - e.strike) / e.strike > 0.02) continue;
+        if (Math.abs(polyStrike - e.strike) / e.strike > 0.025) continue;
         if (!p.endDate) continue;
         const polyEnd = new Date(p.endDate);
         const expireAt = new Date(Date.now() + e.T_years * 365 * 86400_000);
         const dayDiff = Math.abs(polyEnd.getTime() - expireAt.getTime()) / 86400_000;
-        if (dayDiff > 1) continue;
+        if (dayDiff > 3) continue;
         const polyYes = getPolyYesPrice(p);
         if (polyYes === null) continue;
         const polyAbove = q.includes("reach") || q.includes("above") || q.includes("hit");

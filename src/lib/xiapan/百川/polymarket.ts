@@ -87,18 +87,25 @@ export interface KalshiBtcLite {
 }
 
 /// 给定 Kalshi BTC 市场列表 · 找匹配的 Polymarket markets
-/// 匹配规则 ·
-///   · 都含 "BTC" / "bitcoin"
-///   · 行权价 ± 1% · 到期 ± 1 天
+/// V0.72 W3 Day 7 · 放宽匹配规则 ·
+///   strike ± 2.5%  (Polymarket 用整数 · Kalshi 用精确)
+///   到期 ± 3 天    (Polymarket EOD UTC vs Kalshi 17:00)
+///   关键词宽松匹配
 export async function findPolyBtcMatches(kalshiList: KalshiBtcLite[]): Promise<
   Array<{
     kalshi: KalshiBtcLite;
     poly: PolyMarket;
     poly_yes_p: number;
-    diff_pp: number;             // poly_p - kalshi_p · 正 = Polymarket 押 yes 更贵
+    diff_pp: number;
   }>
 > {
-  const polyAll = await fetchPolyMarkets({ search: "BTC", limit: 200 });
+  // 多关键词 · 增加召回
+  const [a, b, c] = await Promise.all([
+    fetchPolyMarkets({ search: "BTC", limit: 200 }),
+    fetchPolyMarkets({ search: "Bitcoin", limit: 200 }),
+    fetchPolyMarkets({ search: "$BTC", limit: 100 }),
+  ]);
+  const polyAll = Array.from(new Map([...a, ...b, ...c].map((p) => [p.id, p])).values());
   if (polyAll.length === 0) return [];
 
   const matches: Array<{
@@ -113,22 +120,31 @@ export async function findPolyBtcMatches(kalshiList: KalshiBtcLite[]): Promise<
     for (const p of polyAll) {
       const q = p.question?.toLowerCase() ?? "";
       if (!q.includes("bitcoin") && !q.includes("btc")) continue;
-      // 解析 question 找 strike (e.g. "Bitcoin reach $70,000 by Dec 31?")
-      const strikeMatch = q.match(/\$?(\d{1,3}(?:,\d{3})*(?:\.\d+)?)/);
-      if (!strikeMatch) continue;
-      const polyStrike = parseFloat(strikeMatch[1].replace(/,/g, ""));
-      if (Math.abs(polyStrike - k_strike) / k_strike > 0.01) continue;
+      // 解析 question 找 strike · 拿所有数字 · 取最接近 k_strike 的
+      const numMatches = Array.from(q.matchAll(/\$?(\d{1,3}(?:,\d{3})*(?:\.\d+)?)k?\b/g));
+      if (numMatches.length === 0) continue;
+      let bestPolyStrike = 0;
+      let bestDelta = Infinity;
+      for (const nm of numMatches) {
+        let v = parseFloat(nm[1].replace(/,/g, ""));
+        if (nm[0].endsWith("k")) v *= 1000;            // "70k" → 70000
+        // 过滤掉年份等明显不是 strike 的数
+        if (v < 1000 || v > 1_000_000) continue;
+        const delta = Math.abs(v - k_strike);
+        if (delta < bestDelta) { bestDelta = delta; bestPolyStrike = v; }
+      }
+      if (bestPolyStrike === 0) continue;
+      if (Math.abs(bestPolyStrike - k_strike) / k_strike > 0.025) continue;     // 放宽到 2.5%
 
-      // 到期匹配 · ± 1 天
+      // 到期匹配 · 放宽 ± 3 天
       if (!p.endDate) continue;
       const polyEnd = new Date(p.endDate);
       const dayDiff = Math.abs(polyEnd.getTime() - k.expire_at.getTime()) / 86400_000;
-      if (dayDiff > 1) continue;
+      if (dayDiff > 3) continue;
 
       const polyYesP = getPolyYesPrice(p);
       if (polyYesP === null) continue;
-      // 方向 · "above $X" 跟 Kalshi side 对齐
-      const polyAbove = q.includes("reach") || q.includes("above") || q.includes("hit");
+      const polyAbove = q.includes("reach") || q.includes("above") || q.includes("hit") || q.includes("exceed") || q.includes(">=") || q.includes("over");
       let polyP = polyYesP;
       if (k.side === "below" && polyAbove) polyP = 1 - polyP;
       else if (k.side === "above" && !polyAbove) polyP = 1 - polyP;
