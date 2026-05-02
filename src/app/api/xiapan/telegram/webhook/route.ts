@@ -119,7 +119,8 @@ export async function POST(req: Request) {
       "  /digest · 今日早间简报\n" +
       "  /pools  · 百川两池余额 (P0/S/C)\n" +
       "  /pools_init <$> · 初始化两池\n" +
-      "  /btc    · BTC BS 公允价 top 5\n" +
+      "  /btc     · BTC BS 公允价 top 5\n" +
+      "  /weather · 天气 NWS+Meteo 双源 top 5\n" +
       "  /max    · Max 最新简报\n" +
       "  /rio    · Rio 最新鲸鱼报\n" +
       "  /iris   · Iris 最新复盘\n" +
@@ -235,6 +236,38 @@ export async function POST(req: Request) {
       } else {
         await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
       }
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // V0.72 · /weather · NWS + Open-Meteo 双源天气信号 top 5
+  if (text === "/weather") {
+    try {
+      const r = await fetch("http://localhost:3001/api/xiapan/weather-edges").then(r => r.json());
+      if (!r.ok) {
+        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const lines = [
+        `◆ 天气 · NWS + Open-Meteo 双源`,
+        ``,
+        `${r.summary.total_signals} 个信号 · 双源 confirm: ${r.summary.dual_confirm_tickers}`,
+        `扫了 ${r.summary.cities_scanned} 城市`,
+        ``,
+      ];
+      const top = r.edges.slice(0, 5);
+      for (const e of top) {
+        const nwsEdge = e.nws ? `${e.nws.edge_pp >= 0 ? "+" : ""}${e.nws.edge_pp.toFixed(1)}pp` : "-";
+        const meteoEdge = e.meteo ? `${e.meteo.edge_pp >= 0 ? "+" : ""}${e.meteo.edge_pp.toFixed(1)}pp` : "-";
+        const star = e.signals.length >= 2 ? "★★" : e.signals.length === 1 ? "★" : "·";
+        lines.push(
+          `${star} ${e.parsed.city} ${e.parsed.type} ≥${e.parsed.threshold} (${e.parsed.date})\n` +
+          `   市场 ${(e.market_p * 100).toFixed(0)}% · NWS ${nwsEdge} · Meteo ${meteoEdge}`
+        );
+      }
+      await sendTelegramMessage(lines.join("\n\n"), { chatId, parseMode: undefined });
     } catch (e) {
       await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
     }

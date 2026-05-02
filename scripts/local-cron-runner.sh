@@ -91,8 +91,14 @@ if (( minute % 5 == 0 )); then
   ping_one "/api/xiapan/btc-edges" "[5min] btc-edges"
 fi
 
+# V0.72 · 每 15 分钟 · 天气 NWS+Meteo (W1 Day 5 信号源)
+# 天气 forecast 更新慢 · 不需要 5min · 减 API 压力
+if (( minute % 15 == 0 )); then
+  ping_one "/api/xiapan/weather-edges" "[15min] weather-edges"
+fi
+
 # V0.72 · 每 5 分钟 · 百川主入口 (signals → fusion → paper)
-# 注 · 必须在 btc-edges 之后跑 · 让信号源先就位 · 错开 1 min
+# 注 · 必须在 btc-edges/weather-edges 之后跑 · 让信号源先就位 · 错开 1 min
 if (( minute % 5 == 1 )); then
   ping_one "/api/xiapan/百川/run?cron=1" "[5min] 百川-run"
 fi

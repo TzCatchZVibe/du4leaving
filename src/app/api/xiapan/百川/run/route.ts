@@ -43,6 +43,23 @@ async function pullBtcSignals(): Promise<SignalSourceResult> {
   }
 }
 
+// V0.72 · 拉 weather 信号 (NWS + Open-Meteo)
+async function pullWeatherSignals(): Promise<SignalSourceResult> {
+  try {
+    const r = await fetch(`${URL_PREFIX}/api/xiapan/weather-edges`, { cache: "no-store" }).then(
+      (r) => r.json()
+    );
+    if (!r.ok) return { source: "weather-edges", signals: [] };
+    const md = new Map<string, { vol_24: number; spread_c: number; market_p: number }>();
+    for (const e of r.edges ?? []) {
+      md.set(e.ticker, { vol_24: e.vol_24, spread_c: e.spread_c, market_p: e.market_p });
+    }
+    return { source: "weather-edges", signals: (r.signals ?? []) as Signal[], market_data: md };
+  } catch {
+    return { source: "weather-edges", signals: [] };
+  }
+}
+
 interface FusionRunResult {
   ticker: string;
   fusion: ReturnType<typeof fuse>;
@@ -61,6 +78,7 @@ function bucketFor(sources: string[]): "stable" | "convex" {
     "btc-cross-platform",
     "fed-futures",
     "weather-nws",
+    "weather-meteo",
     "earnings-consensus",
     "fda-adcom",
   ]);
@@ -103,7 +121,7 @@ export async function GET(req: Request) {
   }
 
   // 1. 拉所有信号源 · 并行
-  const sources = await Promise.all([pullBtcSignals()]);
+  const sources = await Promise.all([pullBtcSignals(), pullWeatherSignals()]);
   const allSignals: Signal[] = sources.flatMap((s) => s.signals);
   const allMarketData = new Map<
     string,
