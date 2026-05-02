@@ -121,6 +121,8 @@ export async function POST(req: Request) {
       "  · 月底分钱报告\n" +
       "  · 系统异常\n\n" +
       "进阶 (你想看时) ·\n" +
+      "  /今日 · 9:30 setup 卡 (BG3 风格)\n" +
+      "  /同伴 · 4 同伴 approval (Max/Rio/Iris/Theo)\n" +
       "  /策略 · 看 15 策略实时分配\n" +
       "  /训   · ML 自进化训练 (周日 23:00 自动)\n\n" +
       "其他 21 旧命令仍能用 · 但建议忘掉\n" +
@@ -375,6 +377,65 @@ export async function POST(req: Request) {
       } else {
         await sendTelegramMessage(`✓ 教程已推送 (${r.sent} 页)`, { chatId, parseMode: undefined });
       }
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // V0.72 W3 Day 10 · /今日 · 9:30 setup 卡 · BG3 风格
+  if (text === "/今日" || text === "/today") {
+    try {
+      const r = await fetch("http://localhost:3001/api/xiapan/baichuan/today", { signal: AbortSignal.timeout(60_000) }).then(r => r.json());
+      if (!r.ok) {
+        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const lines = [
+        `📅 ${r.date} · 今日`,
+        ``,
+        `${r.advantage_emoji}  ${r.tactic_advice}`,
+        ``,
+        `${r.heatmap}`,
+        `${r.heatmap_legend}`,
+        ``,
+        `主力策略 ·`,
+      ];
+      for (const t of r.top3_strategies) {
+        lines.push(`  ${t.emoji} ${t.name} · ${t.pct.toFixed(0)}% · $${t.usd.toFixed(0)}`);
+      }
+      lines.push(``, `同伴 ·`);
+      for (const c of r.companions) {
+        const moodIcon = c.approval >= 30 ? "😊" : c.approval >= -20 ? "😐" : "😠";
+        lines.push(`  ${c.emoji} ${c.name} ${moodIcon}(${c.approval >= 0 ? "+" : ""}${c.approval}) "${c.quote}"`);
+        if (c.blind_spot) lines.push(`    ⚠ ${c.blind_spot}`);
+      }
+      lines.push(``, `今日 · 下 ${r.today_progress.placed} · 平 ${r.today_progress.closed}`);
+      lines.push(`分散 · ${r.diversification.allocated}/${r.diversification.total_eligible} 策略活跃`);
+      await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // V0.72 W3 Day 10 · /同伴 · BG3 approval 详细看
+  if (text === "/同伴" || text === "/companions") {
+    try {
+      const r = await fetch("http://localhost:3001/api/xiapan/baichuan/companions").then(r => r.json());
+      const lines = [
+        `👥 同伴 · 综合 ${r.consensus >= 0 ? "+" : ""}${r.consensus.toFixed(0)}`,
+        ``,
+      ];
+      for (const c of r.companions) {
+        const bar = "▰".repeat(Math.max(0, Math.round((c.approval + 100) / 20))) + "▱".repeat(Math.max(0, 10 - Math.round((c.approval + 100) / 20)));
+        lines.push(`${c.emoji} ${c.name} (${c.archetype})`);
+        lines.push(`   ${bar} ${c.approval >= 0 ? "+" : ""}${c.approval} · ${c.current_mood}`);
+        lines.push(`   "${c.last_quote}"`);
+        if (c.blind_spot) lines.push(`   ⚠ 盲点 · ${c.blind_spot}`);
+        lines.push(``);
+      }
+      await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
     } catch (e) {
       await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
     }
