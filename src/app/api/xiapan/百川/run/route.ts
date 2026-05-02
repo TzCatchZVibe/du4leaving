@@ -44,6 +44,23 @@ async function pullBtcSignals(): Promise<SignalSourceResult> {
   }
 }
 
+// V0.72 W2 · 拉 ETH 信号 (BS + cross-tenor + cross-platform)
+async function pullEthSignals(): Promise<SignalSourceResult> {
+  try {
+    const r = await fetch(`${URL_PREFIX}/api/xiapan/eth-edges`, { cache: "no-store" }).then(
+      (r) => r.json()
+    );
+    if (!r.ok) return { source: "eth-edges", signals: [] };
+    const md = new Map<string, { vol_24: number; spread_c: number; market_p: number }>();
+    for (const e of r.edges ?? []) {
+      md.set(e.ticker, { vol_24: e.vol_24, spread_c: e.spread_c, market_p: e.market_p });
+    }
+    return { source: "eth-edges", signals: (r.signals ?? []) as Signal[], market_data: md };
+  } catch {
+    return { source: "eth-edges", signals: [] };
+  }
+}
+
 // V0.72 · 拉 weather 信号 (NWS + Open-Meteo)
 async function pullWeatherSignals(): Promise<SignalSourceResult> {
   try {
@@ -77,6 +94,9 @@ function bucketFor(sources: string[]): "stable" | "convex" {
     "btc-bs",
     "btc-cross-tenor",
     "btc-cross-platform",
+    "eth-bs",
+    "eth-cross-tenor",
+    "eth-cross-platform",
     "fed-futures",
     "weather-nws",
     "weather-meteo",
@@ -122,7 +142,11 @@ export async function GET(req: Request) {
   }
 
   // 1. 拉所有信号源 · 并行
-  const sources = await Promise.all([pullBtcSignals(), pullWeatherSignals()]);
+  const sources = await Promise.all([
+    pullBtcSignals(),
+    pullEthSignals(),
+    pullWeatherSignals(),
+  ]);
 
   // 1.5 加载当前权重 (Brier 自适应过的)
   const weights = loadWeights();

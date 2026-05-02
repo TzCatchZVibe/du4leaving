@@ -101,9 +101,10 @@ if [[ "$hour" == "12" && "$minute" == "00" ]]; then
   ping_one "/api/xiapan/百川/health?cron=1" "[12:00] 百川-health"
 fi
 
-# V0.72 · 每 5 分钟 · BTC BS 公允价扫 (W1 信号源)
+# V0.72 · 每 5 分钟 · BTC + ETH BS 公允价扫 (W1/W2 信号源)
 if (( minute % 5 == 0 )); then
   ping_one "/api/xiapan/btc-edges" "[5min] btc-edges"
+  ping_one "/api/xiapan/eth-edges" "[5min] eth-edges"
 fi
 
 # V0.72 · 每 15 分钟 · 天气 NWS+Meteo (W1 Day 5 信号源)

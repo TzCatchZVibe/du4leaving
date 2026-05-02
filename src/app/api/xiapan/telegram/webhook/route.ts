@@ -119,7 +119,8 @@ export async function POST(req: Request) {
       "  /digest · 今日早间简报\n" +
       "  /pools  · 百川两池余额 (P0/S/C)\n" +
       "  /pools_init <$> · 初始化两池\n" +
-      "  /btc     · BTC BS 公允价 top 5\n" +
+      "  /btc     · BTC BS+跨期限+跨平台 top 5\n" +
+      "  /eth     · ETH 同上\n" +
       "  /weather · 天气 NWS+Meteo 双源 top 5\n" +
       "  /settle  · 拉 Kalshi 已结算 + update PnL\n" +
       "  /brier   · 看信号权重 + Brier 校准\n" +
@@ -382,6 +383,36 @@ export async function POST(req: Request) {
         lines.push(
           `${star} ${e.parsed.city} ${e.parsed.type} ≥${e.parsed.threshold} (${e.parsed.date})\n` +
           `   市场 ${(e.market_p * 100).toFixed(0)}% · NWS ${nwsEdge} · Meteo ${meteoEdge}`
+        );
+      }
+      await sendTelegramMessage(lines.join("\n\n"), { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // V0.72 W2 · /eth · ETH 三路信号 top 5
+  if (text === "/eth") {
+    try {
+      const r = await fetch("http://localhost:3001/api/xiapan/eth-edges").then(r => r.json());
+      if (!r.ok) {
+        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const lines = [
+        `◆ ETH BS + 跨期限 + 跨平台`,
+        ``,
+        `spot $${r.summary.spot.toFixed(0)} · σ_30d ${(r.summary.sigma_30d * 100).toFixed(0)}%`,
+        `BS ${r.summary.bs_signals} · 跨期限 ${r.summary.cross_tenor_signals} · 跨平台 ${r.summary.cross_platform_signals}`,
+        ``,
+      ];
+      const top5 = r.edges.slice(0, 5);
+      for (const e of top5) {
+        const sign = e.edge_pp >= 0 ? "+" : "";
+        lines.push(
+          `${e.signal ? "★" : "·"} ${e.series} ${e.side} $${e.strike}  T=${e.T_hours.toFixed(1)}h\n` +
+          `   公允 ${(e.fair_p * 100).toFixed(0)}% vs 市场 ${(e.market_p * 100).toFixed(0)}%  ${sign}${e.edge_pp.toFixed(1)}pp`
         );
       }
       await sendTelegramMessage(lines.join("\n\n"), { chatId, parseMode: undefined });
