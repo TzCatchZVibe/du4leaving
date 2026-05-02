@@ -294,6 +294,51 @@ export async function GET(req: Request) {
     byTicker.set(s.ticker, arr);
   }
 
+  // 2.5 V0.72 W3 fix · 单源 ticker 强制补 contrarian (最后一搏 n_active=2)
+  // 对每个仅 1 signal 的 ticker · 直接拉 trades feed · 计 skew · 出 contrarian
+  const singleSigTickers = Array.from(byTicker.entries()).filter(([, sigs]) => sigs.length === 1);
+  const TARGET_TICKERS = singleSigTickers.slice(0, 30).map(([t]) => t);
+  await Promise.all(
+    TARGET_TICKERS.map(async (ticker) => {
+      try {
+        const r = await fetch(
+          `https://api.elections.kalshi.com/trade-api/v2/markets/trades?ticker=${ticker}&limit=100`,
+          { cache: "no-store", signal: AbortSignal.timeout(5000) }
+        );
+        if (!r.ok) return;
+        const d = await r.json();
+        const trades = (d.trades ?? []) as Array<{ taker_side?: string; count_fp?: string }>;
+        let yesSize = 0, noSize = 0;
+        for (const t of trades) {
+          const cnt = parseFloat(t.count_fp || "0");
+          if (cnt <= 0) continue;
+          if (t.taker_side === "yes") yesSize += cnt;
+          else if (t.taker_side === "no") noSize += cnt;
+        }
+        const total = yesSize + noSize;
+        if (total < 5) return;
+        const skew_pct = yesSize / total;
+        if (skew_pct >= 0.42 && skew_pct <= 0.58) return;          // 中性 · 不出
+        const direction: 1 | -1 = skew_pct >= 0.58 ? -1 : 1;
+        const md = allMarketData.get(ticker);
+        if (!md) return;
+        const fair_p = direction === 1
+          ? Math.min(0.95, md.market_p + 0.03)
+          : Math.max(0.05, md.market_p - 0.03);
+        byTicker.get(ticker)!.push({
+          source: "contrarian",
+          ticker,
+          direction,
+          predicted_p: fair_p,
+          confidence: 0.53,
+          reason: `inline contrarian · skew ${(skew_pct * 100).toFixed(0)}% · ${total.toFixed(0)} 张`,
+          ts: new Date().toISOString(),
+          data: { skew_pct, yes_size: yesSize, no_size: noSize },
+        });
+      } catch {}
+    })
+  );
+
   const total = pools.S.balance + pools.C.balance + pools.P0; // for drawdown calc
   const peak = Math.max(pools.S.peak, pools.S.balance);
   const drawdown = peak > 0 ? (peak - pools.S.balance) / peak : 0;
