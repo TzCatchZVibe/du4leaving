@@ -101,49 +101,116 @@ export async function POST(req: Request) {
   const text = msg.text.trim();
   const chatId = String(msg.chat.id);
 
-  // 命令 · /start /help /状态
-  if (text.startsWith("/start") || text === "/help") {
+  // V0.72 W3 Day 8 · 砍 24 → 3 命令 · ADHD + 利润优化
+  // 旧 21 命令保留路径 (backward compat) · 但不在 /帮 文档
+  if (text.startsWith("/start") || text === "/help" || text === "/帮") {
     await sendTelegramMessage(
-      "▲ Theo · Strategist · 押注顾问\n\n" +
-      "直接发问题给我 · 例如 ·\n" +
-      "  · 今天该下啥\n" +
-      "  · KXNBAGAME-... 怎么看\n" +
-      "  · 我哪类标签胜率最高\n\n" +
-      "团队 ·\n" +
-      "  ▲ Max · Head of Research · 5min 扫 picks\n" +
-      "  ● Rio · Flow Watcher · 1min 看鲸鱼\n" +
-      "  ◆ Iris · Head of Review · 每晚复盘\n\n" +
-      "命令 ·\n" +
-      "  /状态   · Mac mini + paper trade 状态\n" +
-      "  /paper  · 模拟单战况\n" +
-      "  /digest · 今日早间简报\n" +
-      "  /pools  · 百川两池余额 (P0/S/C)\n" +
-      "  /pools_init <$> · 初始化两池\n" +
-      "  /btc     · BTC BS+跨期限+跨平台 top 5\n" +
-      "  /eth     · ETH 同上\n" +
-      "  /sol     · SOL 同上\n" +
-      "  /fda     · FDA AdCom 凸性信号 (C 池)\n" +
-      "  /mention · 名人发言错价 (C 池)\n" +
-      "  /contrarian · 反公众信号 (全品类通用)\n" +
-      "  /weather · 天气 NWS+Meteo 双源 top 5\n" +
-      "  /nba     · NBA Elo (538 数据)\n" +
-      "  /nba_refresh · 拉新 538 Elo (周更)\n" +
-      "  /fed     · 经济 FOMC/CPI/Jobs/GDP 跨平台\n" +
-      "  /settle  · 拉 Kalshi 已结算 + update PnL\n" +
-      "  /brier   · 看信号权重 + Brier 校准\n" +
-      "  /health  · 百川全链路健康检查\n" +
-      "  /live    · Kalshi 真钱 client 状态 (默认 OFF)\n" +
-      "  /clv     · CLV 跟踪 (策略真假的金标准)\n" +
-      "  /review [days]  · 综合表现 + 各 source 归因 (默认 30 天)\n" +
-      "  /backtest [days] · 网格搜参 · 找最优阈值\n" +
-      "  /tutorial [page] · 手机教程 8 页 (单页 · /tutorial 1)\n" +
-      "  /max    · Max 最新简报\n" +
-      "  /rio    · Rio 最新鲸鱼报\n" +
-      "  /iris   · Iris 最新复盘\n" +
-      "  /team   · 三人各一段\n" +
-      "  /tickers · 当前 top picks",
+      "百川 · 3 命令搞定\n" +
+      "─────────────────────\n\n" +
+      "/钱   一屏看 · 30 秒结束\n" +
+      "      P0 / S 池 / C 池 / 今日 / 最近 5 笔\n\n" +
+      "/信号 你想看时 · top 5 候选\n" +
+      "      ★ 已下 / · 待触发 / ✕ 跳过\n\n" +
+      "/事   有啥要你动手\n" +
+      "      没事说 \"今天没事\"\n" +
+      "      有就 1-3 条 (init / RSA / cashout)\n\n" +
+      "─────────────────────\n" +
+      "紧急 · 我会自动 push 你 ·\n" +
+      "  · 熔断触发\n" +
+      "  · 第一笔真单成功\n" +
+      "  · 月底分钱报告\n" +
+      "  · 系统异常\n\n" +
+      "其他 21 旧命令仍能用 · 但建议忘掉\n" +
+      "(/btc /eth /sol /weather /fda 等都还在 · 但 /钱 /信号 已包含)",
       { chatId, parseMode: undefined }
     );
+    return NextResponse.json({ ok: true });
+  }
+
+  // V0.72 W3 Day 8 · /钱 · 一屏全
+  if (text === "/钱" || text === "/money") {
+    try {
+      const r = await fetch("http://localhost:3001/api/xiapan/baichuan/money").then(r => r.json());
+      if (!r.initialized) {
+        await sendTelegramMessage(`◧ ${r.message}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const p = r.pools;
+      const t = r.today;
+      const live = r.live;
+      const sign = (v: number) => v >= 0 ? `+$${v.toFixed(2)}` : `-$${Math.abs(v).toFixed(2)}`;
+      const lines = [
+        `${live.enabled ? "🔴 真钱" : "📋 paper"}  ${p.circuit === "running" ? "✓" : "△ " + p.circuit}`,
+        ``,
+        `P0 $${p.P0.toFixed(0)} (红线 $${p.red_line.toFixed(0)})`,
+        `S 池 $${p.S.toFixed(2)} · C 池 $${p.C.toFixed(2)}`,
+        `总 $${p.total.toFixed(2)} · ${p.total_vs_P0_pct >= 0 ? "+" : ""}${p.total_vs_P0_pct.toFixed(1)}%`,
+        ``,
+        `今日 · 下 ${t.placed} · 平 ${t.closed} · 持 ${t.open} · ${sign(t.pnl)}`,
+      ];
+      if (r.recent_5 && r.recent_5.length > 0) {
+        lines.push(``, `最近 5 笔 ·`);
+        for (const l of r.recent_5) {
+          const tickerShort = l.ticker.length > 28 ? l.ticker.slice(0, 28) + ".." : l.ticker;
+          const pnlStr = l.pnl !== null && l.pnl !== undefined ? sign(l.pnl) : "持";
+          lines.push(`  ${l.status} ${l.ts} ${l.bucket==="convex"?"C":"S"} ${l.side==="yes"?"+":"-"}${tickerShort} $${l.stake.toFixed(2)} ${pnlStr}`);
+        }
+      }
+      if (r.lifetime.cashout > 0 || r.lifetime.reinvest > 0) {
+        lines.push(``, `历史 cashout $${r.lifetime.cashout.toFixed(2)} · reinvest $${r.lifetime.reinvest.toFixed(2)}`);
+      }
+      await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // V0.72 W3 Day 8 · /信号 · top 5 候选
+  if (text === "/信号" || text === "/signals") {
+    try {
+      const r = await fetch("http://localhost:3001/api/xiapan/baichuan/signals", { signal: AbortSignal.timeout(180_000) }).then(r => r.json());
+      if (!r.ok) {
+        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const lines = [
+        `信号 · 候选 ${r.summary.total} · 双源 ${r.summary.multi_signal} · 已下 ${r.summary.acted}`,
+        ``,
+      ];
+      if (r.top.length === 0) {
+        lines.push("当前没强信号 · 等下次 cron");
+      } else {
+        for (const s of r.top) {
+          const icon = s.acted ? "★" : (s.fusion?.n_active ?? s.n_active) >= 2 ? "·" : "○";
+          const sign = s.edge_pp >= 0 ? "+" : "";
+          lines.push(`${icon} ${s.ticker}\n   ${sign}${s.edge_pp.toFixed(1)}pp · n=${s.n_active} · 押${s.side==="yes"?"会":"不会"} (${s.bucket})`);
+        }
+      }
+      await sendTelegramMessage(lines.join("\n\n"), { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // V0.72 W3 Day 8 · /事 · 有啥要动手
+  if (text === "/事" || text === "/todo") {
+    try {
+      const r = await fetch("http://localhost:3001/api/xiapan/baichuan/todo").then(r => r.json());
+      if (r.empty_message) {
+        await sendTelegramMessage(`✓ ${r.empty_message}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const lines = [`事 · ${r.summary.total} 件 (${r.summary.high} 急)`, ``];
+      for (const t of r.todos) {
+        const icon = t.priority === "high" ? "🔴" : t.priority === "med" ? "🟡" : "🟢";
+        lines.push(`${icon} ${t.text}\n   ${t.why}`);
+      }
+      await sendTelegramMessage(lines.join("\n\n"), { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
     return NextResponse.json({ ok: true });
   }
 

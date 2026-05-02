@@ -102,10 +102,12 @@ function signRequest(method: string, urlPath: string): {
 
 // ───────────── 真钱风控硬写死 ─────────────
 
+// V0.72 W3 Day 8 · 真钱起步 $50 · 极严风控
+// paper 数据 0 时启用 · 最坏单日亏 $5 = 10% drawdown · 不破本金 ($45)
 const HARD_RISK = {
-  MAX_SINGLE_STAKE_USD: 5.00,        // 单笔上限 $5 起步
-  MAX_DAILY_NEW_ORDERS: 20,          // 日新单上限
-  MAX_DAILY_DOLLAR_NEW: 50.00,       // 日新下钱上限
+  MAX_SINGLE_STAKE_USD: 1.00,        // 单笔 $1 (P0 $50 → 2%)
+  MAX_DAILY_NEW_ORDERS: 5,           // 日 5 单
+  MAX_DAILY_DOLLAR_NEW: 5.00,        // 日 $5
 };
 
 let _dailyState = {

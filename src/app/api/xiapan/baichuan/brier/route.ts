@@ -51,26 +51,8 @@ export async function GET(req: Request) {
 
   saveWeights(newWeights, brier);
 
-  // V0.72 · push Telegram 周报
-  if (changes.length > 0) {
-    try {
-      const tg = await import("@/lib/xiapan/telegram");
-      if (tg.tgEnabled()) {
-        const lines = [
-          `▼ Brier 周校准 · ${new Date().toISOString().slice(0, 10)}`,
-          `${closed.length} 单已平 · 调 ${changes.length} 个信号权重`,
-          ``,
-        ];
-        for (const c of changes.slice(0, 8)) {
-          const arrow = c.new > c.old ? "↑" : "↓";
-          lines.push(
-            `${arrow} ${c.source}  ${c.old.toFixed(2)} → ${c.new.toFixed(2)}  (Brier ${c.brier.toFixed(2)} · n=${c.n})`
-          );
-        }
-        await tg.sendTelegramMessage(lines.join("\n"), { parseMode: undefined });
-      }
-    } catch {}
-  }
+  // V0.72 W3 Day 8 · 删周 push · 合并到 /事
+  // weights 调了进 weights.json · TZ 主动 /事 看
 
   return NextResponse.json({
     ok: true,

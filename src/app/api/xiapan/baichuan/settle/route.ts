@@ -123,21 +123,8 @@ export async function GET(req: Request) {
     losses: settled.filter((r) => r.actual === 0).length,
   };
 
-  // V0.72 · push Telegram · 当日有结算
-  if (summary.settled > 0) {
-    try {
-      const tg = await import("@/lib/xiapan/telegram");
-      if (tg.tgEnabled()) {
-        const sign = summary.total_pnl >= 0 ? "+" : "";
-        await tg.sendTelegramMessage(
-          `▼ Settle ${new Date().toISOString().slice(0, 10)}\n` +
-          `· ${summary.settled} 单结算 · 赢 ${summary.wins} / 输 ${summary.losses}\n` +
-          `· PnL ${sign}$${summary.total_pnl.toFixed(2)}`,
-          { parseMode: undefined }
-        );
-      }
-    } catch {}
-  }
+  // V0.72 W3 Day 8 · 删每日 PnL push (合并到 /钱)
+  // 数据进 lessons.jsonl · /钱 命令显示
 
   return NextResponse.json({ ok: true, summary, results: results.slice(0, 50) });
 }
