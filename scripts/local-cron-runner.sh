@@ -96,6 +96,11 @@ if (( dow == 0 && hour == 22 && minute == 30 )); then
   ping_one "/api/xiapan/百川/brier?cron=1" "[Sun 22:30] 百川-brier"
 fi
 
+# V0.72 · 每天 12:00 · 百川健康检查 · 异常 push Telegram
+if [[ "$hour" == "12" && "$minute" == "00" ]]; then
+  ping_one "/api/xiapan/百川/health?cron=1" "[12:00] 百川-health"
+fi
+
 # V0.72 · 每 5 分钟 · BTC BS 公允价扫 (W1 信号源)
 if (( minute % 5 == 0 )); then
   ping_one "/api/xiapan/btc-edges" "[5min] btc-edges"

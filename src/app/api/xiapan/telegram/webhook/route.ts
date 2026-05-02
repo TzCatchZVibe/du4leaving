@@ -123,6 +123,7 @@ export async function POST(req: Request) {
       "  /weather · 天气 NWS+Meteo 双源 top 5\n" +
       "  /settle  · 拉 Kalshi 已结算 + update PnL\n" +
       "  /brier   · 看信号权重 + Brier 校准\n" +
+      "  /health  · 百川全链路健康检查\n" +
       "  /max    · Max 最新简报\n" +
       "  /rio    · Rio 最新鲸鱼报\n" +
       "  /iris   · Iris 最新复盘\n" +
@@ -238,6 +239,27 @@ export async function POST(req: Request) {
       } else {
         await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
       }
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // V0.72 · /health · 百川全链路健康
+  if (text === "/health") {
+    try {
+      const r = await fetch("http://localhost:3001/api/xiapan/百川/health").then(r => r.json());
+      const overallIcon = r.overall === "ok" ? "✓" : r.overall === "warn" ? "△" : "✗";
+      const lines = [
+        `${overallIcon} 百川健康 · ${r.overall.toUpperCase()}`,
+        `${r.summary.ok}✓ ${r.summary.warn}△ ${r.summary.fail}✗`,
+        ``,
+      ];
+      for (const c of r.checks) {
+        const icon = c.status === "ok" ? "✓" : c.status === "warn" ? "△" : "✗";
+        lines.push(`${icon} ${c.name}\n   ${c.detail.slice(0, 120)}`);
+      }
+      await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
     } catch (e) {
       await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
     }
