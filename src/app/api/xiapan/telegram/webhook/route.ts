@@ -135,6 +135,7 @@ export async function POST(req: Request) {
       "  /live    · Kalshi 真钱 client 状态 (默认 OFF)\n" +
       "  /clv     · CLV 跟踪 (策略真假的金标准)\n" +
       "  /review [days]  · 综合表现 + 各 source 归因 (默认 30 天)\n" +
+      "  /backtest [days] · 网格搜参 · 找最优阈值\n" +
       "  /max    · Max 最新简报\n" +
       "  /rio    · Rio 最新鲸鱼报\n" +
       "  /iris   · Iris 最新复盘\n" +
@@ -250,6 +251,37 @@ export async function POST(req: Request) {
       } else {
         await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
       }
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // V0.72 W3 · /backtest · 网格搜参 · 找最优阈值
+  if (text === "/backtest" || text.startsWith("/backtest")) {
+    const parts = text.split(/\s+/);
+    const days = parts[1] && /^\d+$/.test(parts[1]) ? parts[1] : "30";
+    try {
+      const r = await fetch(`http://localhost:3001/api/xiapan/baichuan/backtest?days=${days}`).then(r => r.json());
+      if (r.message) {
+        await sendTelegramMessage(`◧ ${r.message}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const lines = [
+        `▼ 回测 · ${days} 天 · ${r.sample_size} 已平`,
+        ``,
+        `当前阈值 · ROI ${r.baseline.roi_pct >= 0 ? "+" : ""}${r.baseline.roi_pct.toFixed(1)}%`,
+        `  edge_S=${r.baseline.param.min_edge_pp_stable}pp · edge_C=${r.baseline.param.min_edge_pp_convex}pp · n_active=${r.baseline.param.min_n_active_stable}`,
+        ``,
+        `最优阈值 · ROI ${r.best.roi_pct >= 0 ? "+" : ""}${r.best.roi_pct.toFixed(1)}%`,
+        `  edge_S=${r.best.param.min_edge_pp_stable}pp · edge_C=${r.best.param.min_edge_pp_convex}pp · n_active=${r.best.param.min_n_active_stable}`,
+        `  ${r.best.n_trades} 单 · wr ${(r.best.win_rate * 100).toFixed(0)}%`,
+        ``,
+        `改进 · ${r.improvement_pp >= 0 ? "+" : ""}${r.improvement_pp.toFixed(1)}pp`,
+        ``,
+        r.recommendation,
+      ];
+      await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
     } catch (e) {
       await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
     }
