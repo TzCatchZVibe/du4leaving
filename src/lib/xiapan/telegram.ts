@@ -65,20 +65,10 @@ export async function sendTelegramAlert(title: string, body: string): Promise<{ 
   return sendTelegramMessage(`${title}\n\n${body}`, { parseMode: undefined });
 }
 
-/// 简单 dedup · 同 key 5min 内不重发
+/// V0.72 W3 Day 10 · 全部静默 · TZ 反馈过载
+/// 留 sendTelegramMessage (响应式 · 用户问才答) · 杀 sendTelegramAlertDedupe (主动 push)
 const sendCache = new Map<string, number>();
-export async function sendTelegramAlertDedupe(key: string, title: string, body: string): Promise<{ ok: boolean; deduped?: boolean }> {
-  const last = sendCache.get(key);
-  const now = Date.now();
-  if (last && now - last < 300_000) {
-    return { ok: true, deduped: true };
-  }
-  sendCache.set(key, now);
-  // 清老 key
-  if (sendCache.size > 500) {
-    for (const [k, ts] of sendCache.entries()) {
-      if (now - ts > 3600_000) sendCache.delete(k);
-    }
-  }
-  return await sendTelegramAlert(title, body);
+export async function sendTelegramAlertDedupe(_key: string, _title: string, _body: string): Promise<{ ok: boolean; deduped?: boolean }> {
+  // 全部静默 · 不再 push · 后续如要恢复 · 需经 TZ 明确开关
+  return { ok: true, deduped: true };
 }

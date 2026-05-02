@@ -107,15 +107,9 @@ if (( dow == 0 && hour == 23 && minute == 0 )); then
   ping_one "/api/xiapan/baichuan/train?cron=1" "[Sun 23:00] 百川-train (ML)"
 fi
 
-# V0.72 W3 Day 10 · 每天 9:30 · /今日 setup 卡 push (BG3 风格)
-if [[ "$hour" == "09" && "$minute" == "30" ]]; then
-  ping_one "/api/xiapan/baichuan/today?cron=1" "[09:30] 百川-today setup"
-fi
-
-# V0.72 W3 Day 10 · 每天 22:00 · 测算期日报 push
-if [[ "$hour" == "22" && "$minute" == "00" ]]; then
-  ping_one "/api/xiapan/baichuan/review?cron=1&days=1" "[22:00] 百川-daily-report"
-fi
+# V0.72 W3 Day 10 修 · 删每日 push · TZ 反馈 Telegram 过载
+# /今日 / /review 改成 TZ 主动发命令才看 · 不 cron push
+# (保留 endpoints · 保留 Telegram 命令 · 仅删 cron 自动推)
 
 # V0.72 · 每天 12:00 · 百川健康检查 · 异常 push Telegram
 if [[ "$hour" == "12" && "$minute" == "00" ]]; then
