@@ -129,6 +129,7 @@ export async function POST(req: Request) {
       "  /settle  · 拉 Kalshi 已结算 + update PnL\n" +
       "  /brier   · 看信号权重 + Brier 校准\n" +
       "  /health  · 百川全链路健康检查\n" +
+      "  /live    · Kalshi 真钱 client 状态 (默认 OFF)\n" +
       "  /clv     · CLV 跟踪 (策略真假的金标准)\n" +
       "  /max    · Max 最新简报\n" +
       "  /rio    · Rio 最新鲸鱼报\n" +
@@ -282,6 +283,36 @@ export async function POST(req: Request) {
       lines.push(``, s.verdict === "alpha+" ? "策略真有 alpha · CLV > 0" :
                      s.verdict === "alpha-" ? "⚠ 长期下方向错 · 复盘" :
                      "样本不够或中性");
+      await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // V0.72 W3 · /live · Kalshi 真钱 client 状态
+  if (text === "/live") {
+    try {
+      const r = await fetch("http://localhost:3001/api/xiapan/baichuan/live-status").then(r => r.json());
+      const s = r.status;
+      const lines = [
+        `${s.enabled ? "✓" : "✗"} Kalshi 真钱 · ${s.enabled ? "已启用" : "OFF"}`,
+        ``,
+        `LIVE_TRADING env · ${s.enabled ? "true" : "false (默认)"}`,
+        `KALSHI_API_KEY_ID · ${s.has_key_id ? "✓" : "✗"}`,
+        `RSA private key · ${s.has_private_key ? "✓" : "✗"}`,
+        ``,
+        `原因 · ${s.reason}`,
+      ];
+      if (r.balance !== null) {
+        lines.push(``, `余额 · $${r.balance.toFixed(2)}`);
+      }
+      lines.push(``, `单笔上限 · $${r.risk_limits.MAX_SINGLE_STAKE_USD}`);
+      lines.push(`日新单上限 · ${r.risk_limits.MAX_DAILY_NEW_ORDERS}`);
+      lines.push(`日新钱上限 · $${r.risk_limits.MAX_DAILY_DOLLAR_NEW}`);
+      if (!s.enabled) {
+        lines.push(``, `开启步骤 ·`, r.next_steps);
+      }
       await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
     } catch (e) {
       await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
