@@ -18,6 +18,7 @@
 import { NextResponse } from "next/server";
 import { binaryCallFairP, adaptiveVol } from "@/lib/xiapan/百川/options-pricing";
 import type { Signal } from "@/lib/xiapan/百川/fusion";
+import { findPolyBtcMatches, type KalshiBtcLite } from "@/lib/xiapan/百川/polymarket";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -326,14 +327,43 @@ export async function GET() {
     }
   }
 
-  // 把跨期限信号挂到对应 edge 上
-  for (const s of crossTenorSignals) {
-    const e = edges.find((x) => x.ticker === s.ticker);
-    if (e) {
-      // 同 ticker 上累加 · fusion 自然会读两个
-      // (我们已有 e.signal 是 BS · 这里再产一个是跨期限 · 都进 signals 列表)
+  // ─────────────── 跨平台套利信号 (Polymarket vs Kalshi) ───────────────
+  // 同事件 · 双平台不同价 · 直接套利
+  const kalshiLite: KalshiBtcLite[] = edges
+    .filter((e) => e.side !== "range")
+    .map((e) => ({
+      ticker: e.ticker,
+      strike: e.strike,
+      expire_at: new Date(Date.now() + e.T_years * 365 * 86400_000),
+      side: e.side as "above" | "below",
+      market_p: e.market_p,
+    }));
+
+  const crossPlatformSignals: Signal[] = [];
+  try {
+    const matches = await findPolyBtcMatches(kalshiLite);
+    for (const m of matches) {
+      if (Math.abs(m.diff_pp) < 4) continue;        // 套利门 4pp+
+      // diff > 0 · Polymarket 押 yes 更贵 → Kalshi yes 便宜 · 买 Kalshi yes
+      const direction: 1 | -1 = m.diff_pp > 0 ? 1 : -1;
+      const predicted_p = (m.kalshi.market_p + m.poly_yes_p) / 2;        // 中位
+      crossPlatformSignals.push({
+        source: "btc-cross-platform",
+        ticker: m.kalshi.ticker,
+        direction,
+        predicted_p,
+        confidence: 0.68,
+        reason: `Polymarket vs Kalshi ${m.diff_pp.toFixed(1)}pp (poly ${(m.poly_yes_p * 100).toFixed(0)}% vs kalshi ${(m.kalshi.market_p * 100).toFixed(0)}%)`,
+        ts: new Date().toISOString(),
+        data: {
+          poly_market_id: m.poly.id,
+          poly_question: m.poly.question,
+          poly_p: m.poly_yes_p,
+          kalshi_p: m.kalshi.market_p,
+        },
+      });
     }
-  }
+  } catch { /* 静默 · poly api 偶尔挂 */ }
 
   // 排序 · |edge_pp| 降
   edges.sort((a, b) => Math.abs(b.edge_pp) - Math.abs(a.edge_pp));
@@ -341,9 +371,10 @@ export async function GET() {
   const allSignals = [
     ...edges.filter((e) => e.signal !== null).map((e) => e.signal!),
     ...crossTenorSignals,
+    ...crossPlatformSignals,
   ];
 
-  const signalCount = edges.filter((e) => e.signal !== null).length + crossTenorSignals.length;
+  const signalCount = allSignals.length;
 
   return NextResponse.json({
     ok: true,
@@ -355,6 +386,7 @@ export async function GET() {
       signal_count: signalCount,
       bs_signals: edges.filter((e) => e.signal !== null).length,
       cross_tenor_signals: crossTenorSignals.length,
+      cross_platform_signals: crossPlatformSignals.length,
     },
     edges: edges.slice(0, 30),
     signals: allSignals,

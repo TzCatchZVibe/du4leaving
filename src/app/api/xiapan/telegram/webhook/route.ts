@@ -124,6 +124,7 @@ export async function POST(req: Request) {
       "  /settle  · 拉 Kalshi 已结算 + update PnL\n" +
       "  /brier   · 看信号权重 + Brier 校准\n" +
       "  /health  · 百川全链路健康检查\n" +
+      "  /clv     · CLV 跟踪 (策略真假的金标准)\n" +
       "  /max    · Max 最新简报\n" +
       "  /rio    · Rio 最新鲸鱼报\n" +
       "  /iris   · Iris 最新复盘\n" +
@@ -239,6 +240,44 @@ export async function POST(req: Request) {
       } else {
         await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
       }
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // V0.72 W2 · /clv · 收盘线价值跟踪
+  if (text === "/clv") {
+    try {
+      const r = await fetch("http://localhost:3001/api/xiapan/百川/clv").then(r => r.json());
+      const s = r.summary;
+      if (s.n === 0) {
+        await sendTelegramMessage("◧ 还没已平仓单 · CLV 待累积", { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const verdictIcon =
+        s.verdict === "alpha+" ? "✓" :
+        s.verdict === "alpha-" ? "✗" : "·";
+      const lines = [
+        `${verdictIcon} CLV 跟踪 · ${s.verdict}`,
+        ``,
+        `共 ${s.n} 单 · 平均 ${s.avg_clv_pp >= 0 ? "+" : ""}${s.avg_clv_pp.toFixed(1)}pp`,
+        `+ 占比 ${(s.positive_pct * 100).toFixed(0)}%`,
+        `近 30 单 · ${s.recent_30.avg_clv >= 0 ? "+" : ""}${s.recent_30.avg_clv.toFixed(1)}pp`,
+        ``,
+        `按桶 ·`,
+      ];
+      for (const [k, v] of Object.entries(s.by_bucket as Record<string, { n: number; avg_clv: number }>)) {
+        lines.push(`  ${k}: ${v.n} 单 · ${v.avg_clv >= 0 ? "+" : ""}${v.avg_clv.toFixed(1)}pp`);
+      }
+      lines.push(``, `按信号 ·`);
+      for (const [k, v] of Object.entries(s.by_source as Record<string, { n: number; avg_clv: number }>).slice(0, 6)) {
+        lines.push(`  ${k}: ${v.n} 单 · ${v.avg_clv >= 0 ? "+" : ""}${v.avg_clv.toFixed(1)}pp`);
+      }
+      lines.push(``, s.verdict === "alpha+" ? "策略真有 alpha · CLV > 0" :
+                     s.verdict === "alpha-" ? "⚠ 长期下方向错 · 复盘" :
+                     "样本不够或中性");
+      await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
     } catch (e) {
       await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
     }
