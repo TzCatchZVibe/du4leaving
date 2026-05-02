@@ -91,9 +91,11 @@ if [[ "$day" == "01" && "$hour" == "02" && "$minute" == "30" ]]; then
   ping_one "/api/xiapan/baichuan/review?cron=1&days=30" "[Month 1] 百川-review"
 fi
 
-# V0.72 · 每天 03:00 · 拉 Kalshi 已结算 · update lessons
-if [[ "$hour" == "03" && "$minute" == "00" ]]; then
-  ping_one "/api/xiapan/baichuan/settle?cron=1" "[03:00] 百川-settle"
+# V0.72 W3 Day 12 修 · 每 4 小时拉 Kalshi 结算
+# 之前 03:00 一次 · daily ticker 7am UTC 闭仓 · 平均 20h 延迟
+# 现在 0/4/8/12/16/20 · 平均 2h 延迟 · 7 天测算多攒 70% 数据
+if (( minute == 0 )) && (( 10#$hour % 4 == 0 )); then
+  ping_one "/api/xiapan/baichuan/settle?cron=1" "[${hour}:00] 百川-settle"
 fi
 
 # V0.72 · 每周日 22:30 · Brier 校准 · 调权重

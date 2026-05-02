@@ -300,8 +300,9 @@ export async function GET(req: Request) {
 
   // 2.5 V0.72 W3 fix · 单源 ticker 强制补 contrarian (最后一搏 n_active=2)
   // 对每个仅 1 signal 的 ticker · 直接拉 trades feed · 计 skew · 出 contrarian
+  // V0.72 W3 Day 12 修 · 限 ≤ 10 个 · 防 contrarian 64% 主导 · 保多样性
   const singleSigTickers = Array.from(byTicker.entries()).filter(([, sigs]) => sigs.length === 1);
-  const TARGET_TICKERS = singleSigTickers.slice(0, 30).map(([t]) => t);
+  const TARGET_TICKERS = singleSigTickers.slice(0, 10).map(([t]) => t);
   await Promise.all(
     TARGET_TICKERS.map(async (ticker) => {
       try {

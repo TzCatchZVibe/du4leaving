@@ -100,9 +100,10 @@ export async function allocateStrategies(opts: AllocateOpts): Promise<{
     const ev_from_meta = (strategy.good_month_pct + strategy.bad_month_pct) / 2;
     const expected_ev_pct = isNaN(ev_from_history) ? ev_from_meta : ev_from_history;
 
-    // score · 综合评分 (信号活跃度 × EV × Brier 权重)
-    // 活跃 (current_signals ≥ 1) 加大权 · 否则按基础值
-    const activity_factor = current_signals === 0 ? 0.3 : Math.min(1, current_signals / 5);
+    // V0.72 W3 Day 12 修 · 0 信号 = 0 分数 = 0 分配
+    // 之前 bug · 0 信号给 0.3 baseline · 占用 ~40% 总仓 (10 个 0 信号策略 × 6.5%)
+    // 释放给真活跃策略
+    const activity_factor = current_signals === 0 ? 0 : Math.min(1, current_signals / 5);
     const score = Math.max(0, expected_ev_pct) * activity_factor * current_weight;
 
     return {
