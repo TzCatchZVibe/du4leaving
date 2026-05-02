@@ -11,6 +11,7 @@ import { fuse, decide, type Signal } from "@/lib/xiapan/百川/fusion";
 import { readPools, debitFromPool } from "@/lib/xiapan/百川/pools";
 import { checkRealtimeCircuit } from "@/lib/xiapan/百川/allocator";
 import { appendLesson } from "@/lib/xiapan/百川/lessons";
+import { loadWeights } from "@/lib/xiapan/百川/weights";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -122,6 +123,9 @@ export async function GET(req: Request) {
 
   // 1. 拉所有信号源 · 并行
   const sources = await Promise.all([pullBtcSignals(), pullWeatherSignals()]);
+
+  // 1.5 加载当前权重 (Brier 自适应过的)
+  const weights = loadWeights();
   const allSignals: Signal[] = sources.flatMap((s) => s.signals);
   const allMarketData = new Map<
     string,
@@ -158,7 +162,7 @@ export async function GET(req: Request) {
       ticker,
       market_implied_p: md.market_p,
       signals,
-      // signal_weights · 默认 1.0 · 后续 Brier 调
+      signal_weights: weights,             // V0.72 · Brier 自适应
     });
 
     const decision = decide({

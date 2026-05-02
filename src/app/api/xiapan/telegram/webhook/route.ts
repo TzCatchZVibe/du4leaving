@@ -121,6 +121,8 @@ export async function POST(req: Request) {
       "  /pools_init <$> · 初始化两池\n" +
       "  /btc     · BTC BS 公允价 top 5\n" +
       "  /weather · 天气 NWS+Meteo 双源 top 5\n" +
+      "  /settle  · 拉 Kalshi 已结算 + update PnL\n" +
+      "  /brier   · 看信号权重 + Brier 校准\n" +
       "  /max    · Max 最新简报\n" +
       "  /rio    · Rio 最新鲸鱼报\n" +
       "  /iris   · Iris 最新复盘\n" +
@@ -236,6 +238,60 @@ export async function POST(req: Request) {
       } else {
         await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
       }
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // V0.72 · /brier · 当前信号权重 + 最新 Brier
+  if (text === "/brier") {
+    try {
+      const r = await fetch("http://localhost:3001/api/xiapan/百川/brier").then(r => r.json());
+      if (r.message) {
+        await sendTelegramMessage(`◧ ${r.message}\n· 总 lessons ${r.lessons_total ?? 0}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const w = r.weights_new ?? r.weights_old ?? {};
+      const b = r.brier_by_source ?? {};
+      const lines = [
+        `◆ Brier 校准 · ${r.closed_lessons} 单已平`,
+        ``,
+        `信号权重 (1.0 = 中 · ↑ 越准 · ↓ 越差) ·`,
+      ];
+      const entries = Object.entries(w).sort((a, b) => (b[1] as number) - (a[1] as number));
+      for (const [src, weight] of entries) {
+        const bd = b[src];
+        const brierStr = bd ? `B=${bd.brier.toFixed(2)} n=${bd.n}` : "尚无样本";
+        lines.push(`  ${(weight as number).toFixed(2)}  ${src}  (${brierStr})`);
+      }
+      if (r.changes && r.changes.length > 0) {
+        lines.push(``, `本次调整 · ${r.changes.length} 个信号`);
+      }
+      await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // V0.72 · /settle · 拉 Kalshi 已结算 · update lessons
+  if (text === "/settle") {
+    try {
+      const r = await fetch("http://localhost:3001/api/xiapan/百川/settle").then(r => r.json());
+      if (r.message) {
+        await sendTelegramMessage(`◧ ${r.message}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const s = r.summary;
+      const sign = s.total_pnl >= 0 ? "+" : "";
+      await sendTelegramMessage(
+        `▼ Settle\n` +
+        `· 检 ${s.total_checked} 单 · 结算 ${s.settled} · 仍开 ${s.still_open}\n` +
+        `· 赢 ${s.wins} / 输 ${s.losses}\n` +
+        `· PnL ${sign}$${s.total_pnl.toFixed(2)}`,
+        { chatId, parseMode: undefined }
+      );
     } catch (e) {
       await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
     }

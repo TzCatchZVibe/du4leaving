@@ -86,6 +86,16 @@ if [[ "$day" == "01" && "$hour" == "02" && "$minute" == "00" ]]; then
   ping_one "/api/xiapan/百川/allocate?cron=1" "[Month 1] 百川-allocate"
 fi
 
+# V0.72 · 每天 03:00 · 拉 Kalshi 已结算 · update lessons
+if [[ "$hour" == "03" && "$minute" == "00" ]]; then
+  ping_one "/api/xiapan/百川/settle?cron=1" "[03:00] 百川-settle"
+fi
+
+# V0.72 · 每周日 22:30 · Brier 校准 · 调权重
+if (( dow == 0 && hour == 22 && minute == 30 )); then
+  ping_one "/api/xiapan/百川/brier?cron=1" "[Sun 22:30] 百川-brier"
+fi
+
 # V0.72 · 每 5 分钟 · BTC BS 公允价扫 (W1 信号源)
 if (( minute % 5 == 0 )); then
   ping_one "/api/xiapan/btc-edges" "[5min] btc-edges"
