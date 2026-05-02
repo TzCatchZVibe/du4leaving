@@ -134,6 +134,7 @@ export async function POST(req: Request) {
       "  /health  · 百川全链路健康检查\n" +
       "  /live    · Kalshi 真钱 client 状态 (默认 OFF)\n" +
       "  /clv     · CLV 跟踪 (策略真假的金标准)\n" +
+      "  /review [days]  · 综合表现 + 各 source 归因 (默认 30 天)\n" +
       "  /max    · Max 最新简报\n" +
       "  /rio    · Rio 最新鲸鱼报\n" +
       "  /iris   · Iris 最新复盘\n" +
@@ -249,6 +250,43 @@ export async function POST(req: Request) {
       } else {
         await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
       }
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // V0.72 W3 · /review · 综合表现 (CLV + Brier + PnL + 各 source 归因)
+  if (text === "/review" || text.startsWith("/review")) {
+    const parts = text.split(/\s+/);
+    const days = parts[1] && /^\d+$/.test(parts[1]) ? parts[1] : "30";
+    try {
+      const r = await fetch(`http://localhost:3001/api/xiapan/baichuan/review?days=${days}`).then(r => r.json());
+      const s = r.summary;
+      const c = r.clv;
+      const sign = s.total_pnl >= 0 ? "+" : "";
+      const lines = [
+        `▼ 综合表现 · ${days} 天`,
+        ``,
+        `lessons · ${s.total_lessons} 总 · ${s.closed} 平 · ${s.open} 持`,
+        `wr ${(s.win_rate * 100).toFixed(0)}% · PnL ${sign}$${s.total_pnl}`,
+        ``,
+        `S 桶 · ${s.stable.n} 单 · ${s.stable.pnl >= 0 ? "+" : ""}$${s.stable.pnl}`,
+        `C 桶 · ${s.convex.n} 单 · ${s.convex.pnl >= 0 ? "+" : ""}$${s.convex.pnl}`,
+        ``,
+        `CLV · ${c.avg_clv_pp >= 0 ? "+" : ""}${c.avg_clv_pp.toFixed(1)}pp · ${c.verdict}`,
+      ];
+      if (r.pools) {
+        const dd = (r.pools.S_drawdown_from_peak_pct * 100).toFixed(1);
+        lines.push(``, `S 池 · $${r.pools.S.toFixed(2)} (peak $${r.pools.S_peak.toFixed(2)} · drawdown ${dd}%)`);
+        lines.push(`C 池 · $${r.pools.C.toFixed(2)}`);
+      }
+      lines.push(``, `top 5 sources ·`);
+      for (const sa of (r.sources as Array<{ source: string; closed: number; participated: number; win_rate: number; total_pnl: number; avg_clv_pp: number; verdict: string; }>).slice(0, 5)) {
+        const v = sa.verdict === "alpha+" ? "✓" : sa.verdict === "alpha-" ? "✗" : "·";
+        lines.push(`  ${v} ${sa.source}\n    ${sa.closed}/${sa.participated} · wr ${(sa.win_rate * 100).toFixed(0)}% · ${sa.total_pnl >= 0 ? "+" : ""}$${sa.total_pnl} · CLV ${sa.avg_clv_pp >= 0 ? "+" : ""}${sa.avg_clv_pp}pp`);
+      }
+      await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
     } catch (e) {
       await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
     }

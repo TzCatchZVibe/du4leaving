@@ -86,6 +86,11 @@ if [[ "$day" == "01" && "$hour" == "02" && "$minute" == "00" ]]; then
   ping_one "/api/xiapan/baichuan/allocate?cron=1" "[Month 1] 百川-allocate"
 fi
 
+# V0.72 W3 Day 5 · 每月 1 号 02:30 · 月度综合表现报告 (allocate 之后)
+if [[ "$day" == "01" && "$hour" == "02" && "$minute" == "30" ]]; then
+  ping_one "/api/xiapan/baichuan/review?cron=1&days=30" "[Month 1] 百川-review"
+fi
+
 # V0.72 · 每天 03:00 · 拉 Kalshi 已结算 · update lessons
 if [[ "$hour" == "03" && "$minute" == "00" ]]; then
   ping_one "/api/xiapan/baichuan/settle?cron=1" "[03:00] 百川-settle"
