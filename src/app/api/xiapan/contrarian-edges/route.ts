@@ -134,8 +134,11 @@ async function fetchTradesSkew(ticker: string, limit = 100): Promise<SkewResult 
   }
 }
 
-const SKEW_HIGH = 0.65;
-const SKEW_LOW = 0.35;
+// V0.72 W3 Day 7 · 放宽阈值 · 提高 n_active=2 重叠率
+// 经验 · 50% skew 也是弱反公众信号 · 降阈到 0.58/0.42
+// 配合 fusion 0.53 conf · 单源不会乱触发 (n_active≥2 才下)
+const SKEW_HIGH = 0.58;
+const SKEW_LOW = 0.42;
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
