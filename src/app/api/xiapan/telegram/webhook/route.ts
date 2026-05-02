@@ -126,6 +126,8 @@ export async function POST(req: Request) {
       "  /mention · 名人发言错价 (C 池)\n" +
       "  /contrarian · 反公众信号 (全品类通用)\n" +
       "  /weather · 天气 NWS+Meteo 双源 top 5\n" +
+      "  /nba     · NBA Elo (538 数据)\n" +
+      "  /nba_refresh · 拉新 538 Elo (周更)\n" +
       "  /settle  · 拉 Kalshi 已结算 + update PnL\n" +
       "  /brier   · 看信号权重 + Brier 校准\n" +
       "  /health  · 百川全链路健康检查\n" +
@@ -389,6 +391,36 @@ export async function POST(req: Request) {
         `· PnL ${sign}$${s.total_pnl.toFixed(2)}`,
         { chatId, parseMode: undefined }
       );
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // V0.72 W3 · /nba · NBA Elo 信号 + 让你刷一次 538
+  if (text === "/nba" || text.startsWith("/nba_refresh")) {
+    try {
+      const refresh = text.startsWith("/nba_refresh") ? "?refresh=1" : "";
+      const r = await fetch(`http://localhost:3001/api/xiapan/nba-edges${refresh}`).then(r => r.json());
+      if (!r.ok) {
+        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const lines = [
+        `◆ NBA Elo · ${r.summary.elo_source} · ${r.summary.total_teams} 队`,
+        `Elo 更新 · ${r.summary.elo_ts.slice(0, 10)}`,
+        ``,
+        `${r.summary.signals} 信号 / ${r.summary.total_markets} 市场`,
+        ``,
+      ];
+      for (const e of r.edges.slice(0, 5)) {
+        const sign = e.edge_pp >= 0 ? "+" : "";
+        lines.push(
+          `${e.signal ? "★" : "·"} ${e.team_away}@${e.team_home} (押 ${e.yes_team})\n` +
+          `   公允 ${(e.fair_p * 100).toFixed(0)}% vs 市场 ${(e.market_p * 100).toFixed(0)}%  ${sign}${e.edge_pp.toFixed(1)}pp · vol $${e.vol_24.toFixed(0)}`
+        );
+      }
+      await sendTelegramMessage(lines.join("\n\n"), { chatId, parseMode: undefined });
     } catch (e) {
       await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
     }

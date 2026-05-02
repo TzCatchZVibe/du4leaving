@@ -35,6 +35,7 @@ const DEFAULT_WEIGHTS: Record<string, number> = {
   "fda-adcom": 1.0,
   "mention-engine": 1.0,
   "contrarian": 1.0,
+  "nba-elo": 1.0,
 };
 
 function ensureDir() {

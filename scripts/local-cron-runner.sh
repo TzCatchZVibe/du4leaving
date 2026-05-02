@@ -131,6 +131,17 @@ if (( minute % 15 == 0 )); then
   ping_one "/api/xiapan/weather-edges" "[15min] weather-edges"
 fi
 
+# V0.72 W3 Day 3 · 每 30 分钟 · NBA Elo (S 桶)
+# NBA 比赛 Elo 不变 · 仅价格变 · 不用 5min
+if (( minute % 30 == 0 )); then
+  ping_one "/api/xiapan/nba-edges" "[30min] nba-edges"
+fi
+
+# V0.72 W3 · 每周一 04:00 · 538 Elo refresh
+if [[ "$dow" == "1" && "$hour" == "04" && "$minute" == "00" ]]; then
+  ping_one "/api/xiapan/nba-edges?refresh=1" "[Mon 04:00] nba-elo-refresh"
+fi
+
 # V0.72 · 每 5 分钟 · 百川主入口 (signals → fusion → paper)
 # 注 · 必须在 btc-edges/weather-edges 之后跑 · 让信号源先就位 · 错开 1 min
 if (( minute % 5 == 1 )); then

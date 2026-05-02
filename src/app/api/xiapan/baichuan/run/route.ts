@@ -78,6 +78,23 @@ async function pullSolSignals(): Promise<SignalSourceResult> {
   }
 }
 
+// V0.72 W3 · 拉 NBA Elo 信号 (体育品类)
+async function pullNbaSignals(): Promise<SignalSourceResult> {
+  try {
+    const r = await fetch(`${URL_PREFIX}/api/xiapan/nba-edges`, { cache: "no-store" }).then(
+      (r) => r.json()
+    );
+    if (!r.ok) return { source: "nba-edges", signals: [] };
+    const md = new Map<string, { vol_24: number; spread_c: number; market_p: number }>();
+    for (const e of r.edges ?? []) {
+      md.set(e.ticker, { vol_24: e.vol_24, spread_c: e.spread_c, market_p: e.market_p });
+    }
+    return { source: "nba-edges", signals: (r.signals ?? []) as Signal[], market_data: md };
+  } catch {
+    return { source: "nba-edges", signals: [] };
+  }
+}
+
 // V0.72 W2 · 拉反公众信号 (vol skew · 全品类通用)
 async function pullContrarianSignals(): Promise<SignalSourceResult> {
   try {
@@ -184,6 +201,7 @@ function bucketFor(sources: string[]): "stable" | "convex" {
     "weather-meteo",
     "earnings-consensus",
     "contrarian",            // 反公众 · 全品类共用 · 进 stable (低 conf 但稳)
+    "nba-elo",               // NBA Elo
   ]);
   // 凸性 (C 池) · 高 EV 但低 hit · 长尾押注
   // fda-adcom / phase3 / mention-engine / yn-signals / breaking-news 都进 convex
@@ -234,6 +252,7 @@ export async function GET(req: Request) {
     pullFdaSignals(),
     pullMentionSignals(),
     pullContrarianSignals(),
+    pullNbaSignals(),
   ]);
 
   // 1.5 加载当前权重 (Brier 自适应过的)
