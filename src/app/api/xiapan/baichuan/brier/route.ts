@@ -1,4 +1,4 @@
-// /api/xiapan/百川/brier
+// /api/xiapan/baichuan/brier
 //
 // V0.72 · 周更 · 计算每信号源的 Brier · 调权重
 // cron · 周日 22:30 · 在 paper-weekly 之后

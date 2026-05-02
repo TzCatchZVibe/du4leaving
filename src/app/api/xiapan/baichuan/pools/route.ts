@@ -1,4 +1,4 @@
-// /api/xiapan/百川/pools
+// /api/xiapan/baichuan/pools
 // V0.72 · 两池状态 read + init
 //
 // GET  · 返回当前 pools 状态 (S / C / P0 / lifetime)

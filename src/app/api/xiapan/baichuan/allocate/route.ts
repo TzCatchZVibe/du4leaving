@@ -1,4 +1,4 @@
-// /api/xiapan/百川/allocate
+// /api/xiapan/baichuan/allocate
 // V0.72 · 月底分配 · cron 触发
 //
 // GET ?cron=1  · cron-runner 调 · 跑 monthly allocation

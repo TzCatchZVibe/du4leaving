@@ -1,4 +1,4 @@
-// /api/xiapan/百川/run
+// /api/xiapan/baichuan/run
 //
 // V0.72 · 百川主入口 · cron 每 5 分钟跑
 //   1. 拉所有信号源 (当前 · btc-edges)

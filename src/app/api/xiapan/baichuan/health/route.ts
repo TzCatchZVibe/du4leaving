@@ -1,4 +1,4 @@
-// /api/xiapan/百川/health
+// /api/xiapan/baichuan/health
 //
 // V0.72 · W1 Day 7 · 百川全链路健康检查
 // 自检每个组件 · 出红绿表 · push Telegram 异常
@@ -118,7 +118,7 @@ export async function GET(req: Request) {
   const [btcRes, weatherRes, runRes] = await Promise.all([
     pingEndpoint("/api/xiapan/btc-edges", 12000),
     pingEndpoint("/api/xiapan/weather-edges", 25000),
-    pingEndpoint("/api/xiapan/百川/run"),
+    pingEndpoint("/api/xiapan/baichuan/run"),
   ]);
   checks.push({
     name: "btc-edges",

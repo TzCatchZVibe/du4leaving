@@ -1,4 +1,4 @@
-// /api/xiapan/百川/clv
+// /api/xiapan/baichuan/clv
 // V0.72 W2 · CLV 跟踪报告
 
 import { NextResponse } from "next/server";

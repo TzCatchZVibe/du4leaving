@@ -186,7 +186,7 @@ export async function POST(req: Request) {
   // V0.72 · /pools · 百川两池状态
   if (text === "/pools") {
     try {
-      const r = await fetch("http://localhost:3001/api/xiapan/百川/pools").then(r => r.json());
+      const r = await fetch("http://localhost:3001/api/xiapan/baichuan/pools").then(r => r.json());
       if (!r.initialized) {
         await sendTelegramMessage(
           "△ 百川两池未初始化\n\n命令 ·\n  /pools_init 400  (注入本金 $400 起步)",
@@ -228,7 +228,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true });
     }
     try {
-      const r = await fetch("http://localhost:3001/api/xiapan/百川/pools", {
+      const r = await fetch("http://localhost:3001/api/xiapan/baichuan/pools", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ P0: amount }),
@@ -254,7 +254,7 @@ export async function POST(req: Request) {
   // V0.72 W2 · /clv · 收盘线价值跟踪
   if (text === "/clv") {
     try {
-      const r = await fetch("http://localhost:3001/api/xiapan/百川/clv").then(r => r.json());
+      const r = await fetch("http://localhost:3001/api/xiapan/baichuan/clv").then(r => r.json());
       const s = r.summary;
       if (s.n === 0) {
         await sendTelegramMessage("◧ 还没已平仓单 · CLV 待累积", { chatId, parseMode: undefined });
@@ -292,7 +292,7 @@ export async function POST(req: Request) {
   // V0.72 · /health · 百川全链路健康
   if (text === "/health") {
     try {
-      const r = await fetch("http://localhost:3001/api/xiapan/百川/health").then(r => r.json());
+      const r = await fetch("http://localhost:3001/api/xiapan/baichuan/health").then(r => r.json());
       const overallIcon = r.overall === "ok" ? "✓" : r.overall === "warn" ? "△" : "✗";
       const lines = [
         `${overallIcon} 百川健康 · ${r.overall.toUpperCase()}`,
@@ -313,7 +313,7 @@ export async function POST(req: Request) {
   // V0.72 · /brier · 当前信号权重 + 最新 Brier
   if (text === "/brier") {
     try {
-      const r = await fetch("http://localhost:3001/api/xiapan/百川/brier").then(r => r.json());
+      const r = await fetch("http://localhost:3001/api/xiapan/baichuan/brier").then(r => r.json());
       if (r.message) {
         await sendTelegramMessage(`◧ ${r.message}\n· 总 lessons ${r.lessons_total ?? 0}`, { chatId, parseMode: undefined });
         return NextResponse.json({ ok: true });
@@ -344,7 +344,7 @@ export async function POST(req: Request) {
   // V0.72 · /settle · 拉 Kalshi 已结算 · update lessons
   if (text === "/settle") {
     try {
-      const r = await fetch("http://localhost:3001/api/xiapan/百川/settle").then(r => r.json());
+      const r = await fetch("http://localhost:3001/api/xiapan/baichuan/settle").then(r => r.json());
       if (r.message) {
         await sendTelegramMessage(`◧ ${r.message}`, { chatId, parseMode: undefined });
         return NextResponse.json({ ok: true });

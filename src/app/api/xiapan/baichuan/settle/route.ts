@@ -1,4 +1,4 @@
-// /api/xiapan/百川/settle
+// /api/xiapan/baichuan/settle
 //
 // V0.72 · 拉 Kalshi 已结算市场 · update lessons.jsonl · 把 PnL 写回 pools
 // 每天 03:00 cron 跑一次

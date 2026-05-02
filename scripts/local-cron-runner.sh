@@ -83,22 +83,22 @@ fi
 # V0.72 · 每月 1 号 02:00 · 百川两池月度结算
 day=$(date +%d)
 if [[ "$day" == "01" && "$hour" == "02" && "$minute" == "00" ]]; then
-  ping_one "/api/xiapan/百川/allocate?cron=1" "[Month 1] 百川-allocate"
+  ping_one "/api/xiapan/baichuan/allocate?cron=1" "[Month 1] 百川-allocate"
 fi
 
 # V0.72 · 每天 03:00 · 拉 Kalshi 已结算 · update lessons
 if [[ "$hour" == "03" && "$minute" == "00" ]]; then
-  ping_one "/api/xiapan/百川/settle?cron=1" "[03:00] 百川-settle"
+  ping_one "/api/xiapan/baichuan/settle?cron=1" "[03:00] 百川-settle"
 fi
 
 # V0.72 · 每周日 22:30 · Brier 校准 · 调权重
 if (( dow == 0 && hour == 22 && minute == 30 )); then
-  ping_one "/api/xiapan/百川/brier?cron=1" "[Sun 22:30] 百川-brier"
+  ping_one "/api/xiapan/baichuan/brier?cron=1" "[Sun 22:30] 百川-brier"
 fi
 
 # V0.72 · 每天 12:00 · 百川健康检查 · 异常 push Telegram
 if [[ "$hour" == "12" && "$minute" == "00" ]]; then
-  ping_one "/api/xiapan/百川/health?cron=1" "[12:00] 百川-health"
+  ping_one "/api/xiapan/baichuan/health?cron=1" "[12:00] 百川-health"
 fi
 
 # V0.72 · 每 5 分钟 · BTC + ETH + SOL BS 公允价扫 (W1/W2 信号源)
@@ -134,5 +134,5 @@ fi
 # V0.72 · 每 5 分钟 · 百川主入口 (signals → fusion → paper)
 # 注 · 必须在 btc-edges/weather-edges 之后跑 · 让信号源先就位 · 错开 1 min
 if (( minute % 5 == 1 )); then
-  ping_one "/api/xiapan/百川/run?cron=1" "[5min] 百川-run"
+  ping_one "/api/xiapan/baichuan/run?cron=1" "[5min] 百川-run"
 fi
