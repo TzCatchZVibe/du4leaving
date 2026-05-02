@@ -48,37 +48,51 @@ interface SourceEdge {
   yes_ask_c?: number;
 }
 
+// 简单 in-memory 缓存 · 5 min · 避免多次 cascading fetch
+let _cache: { ts: number; markets: MarketLite[] } | null = null;
+const CACHE_TTL_MS = 5 * 60_000;
+
 /// 从其他信号源已 fetch 的高 vol ticker 池
 async function pullActiveTickers(): Promise<MarketLite[]> {
+  if (_cache && Date.now() - _cache.ts < CACHE_TTL_MS && _cache.markets.length > 0) {
+    return _cache.markets;
+  }
+
   const sources = ["btc-edges", "eth-edges", "sol-edges", "weather-edges", "nba-edges", "fed-edges"];
   const tickerMap = new Map<string, MarketLite>();
 
-  await Promise.all(
-    sources.map(async (s) => {
-      try {
-        const r = await fetch(`${URL_PREFIX}/api/xiapan/${s}`, {
-          cache: "no-store",
-          signal: AbortSignal.timeout(15_000),
-        }).then((r) => r.json());
-        if (!r.ok) return;
-        for (const e of (r.edges ?? []) as SourceEdge[]) {
-          if (!e.ticker || tickerMap.has(e.ticker)) continue;
-          if ((e.vol_24 ?? 0) < 50) continue;
-          if (e.market_p === undefined) continue;
-          if (e.market_p <= 0.05 || e.market_p >= 0.95) continue;       // 尾事件跳
-          tickerMap.set(e.ticker, {
-            ticker: e.ticker,
-            yes_ask_c: Math.round((e.market_p ?? 0) * 100),
-            yes_bid_c: Math.round((e.market_p ?? 0) * 100) - (e.spread_c ?? 0),
-            vol_24: e.vol_24 ?? 0,
-            spread_c: e.spread_c ?? 0,
-            market_p: e.market_p ?? 0,
-          });
-        }
-      } catch {}
-    })
-  );
-  return Array.from(tickerMap.values()).sort((a, b) => b.vol_24 - a.vol_24);
+  // 顺序拉 · 每个 30s timeout · 避免并行雪崩
+  for (const s of sources) {
+    try {
+      const r = await fetch(`${URL_PREFIX}/api/xiapan/${s}`, {
+        cache: "no-store",
+        signal: AbortSignal.timeout(30_000),
+      }).then((r) => r.json());
+      if (!r.ok) continue;
+      for (const e of (r.edges ?? []) as SourceEdge[]) {
+        if (!e.ticker || tickerMap.has(e.ticker)) continue;
+        if ((e.vol_24 ?? 0) < 50) continue;
+        if (e.market_p === undefined) continue;
+        if (e.market_p <= 0.05 || e.market_p >= 0.95) continue;
+        tickerMap.set(e.ticker, {
+          ticker: e.ticker,
+          yes_ask_c: Math.round((e.market_p ?? 0) * 100),
+          yes_bid_c: Math.round((e.market_p ?? 0) * 100) - (e.spread_c ?? 0),
+          vol_24: e.vol_24 ?? 0,
+          spread_c: e.spread_c ?? 0,
+          market_p: e.market_p ?? 0,
+        });
+      }
+    } catch {
+      // 单个源失败不阻塞其他
+    }
+  }
+
+  const markets = Array.from(tickerMap.values()).sort((a, b) => b.vol_24 - a.vol_24);
+  if (markets.length > 0) {
+    _cache = { ts: Date.now(), markets };
+  }
+  return markets;
 }
 
 interface SkewResult {
