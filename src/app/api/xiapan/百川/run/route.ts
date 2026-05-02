@@ -78,6 +78,25 @@ async function pullSolSignals(): Promise<SignalSourceResult> {
   }
 }
 
+// V0.72 W2 · 拉 Mention 信号 (Catboy / Trump 名人发言 · 凸性桶)
+async function pullMentionSignals(): Promise<SignalSourceResult> {
+  try {
+    const r = await fetch(`${URL_PREFIX}/api/xiapan/mention-edges`, { cache: "no-store" }).then(
+      (r) => r.json()
+    );
+    if (!r.ok) return { source: "mention-edges", signals: [] };
+    const md = new Map<string, { vol_24: number; spread_c: number; market_p: number }>();
+    if (r.market_data) {
+      for (const [ticker, mdEntry] of Object.entries(r.market_data as Record<string, { vol_24: number; spread_c: number; market_p: number }>)) {
+        md.set(ticker, mdEntry);
+      }
+    }
+    return { source: "mention-edges", signals: (r.signals ?? []) as Signal[], market_data: md };
+  } catch {
+    return { source: "mention-edges", signals: [] };
+  }
+}
+
 // V0.72 W2 · 拉 FDA 信号 (AdCom 投票后 · 凸性桶)
 async function pullFdaSignals(): Promise<SignalSourceResult> {
   try {
@@ -193,6 +212,7 @@ export async function GET(req: Request) {
     pullSolSignals(),
     pullWeatherSignals(),
     pullFdaSignals(),
+    pullMentionSignals(),
   ]);
 
   // 1.5 加载当前权重 (Brier 自适应过的)

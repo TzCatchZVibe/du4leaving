@@ -33,6 +33,7 @@ const DEFAULT_WEIGHTS: Record<string, number> = {
   "fed-futures": 1.0,
   "earnings-consensus": 1.0,
   "fda-adcom": 1.0,
+  "mention-engine": 1.0,
 };
 
 function ensureDir() {

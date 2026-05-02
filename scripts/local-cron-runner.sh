@@ -113,6 +113,12 @@ if (( minute % 30 == 0 )); then
   ping_one "/api/xiapan/fda-edges" "[30min] fda-edges"
 fi
 
+# V0.72 W2 Day 5 · 每 20 分钟 · Mention 错价 (Catboy/Trump · C 池)
+# 频率高 · LLM 估错价 · 抢黄金 5-15min 窗
+if (( minute % 20 == 0 )); then
+  ping_one "/api/xiapan/mention-edges" "[20min] mention-edges"
+fi
+
 # V0.72 · 每 15 分钟 · 天气 NWS+Meteo (W1 Day 5 信号源)
 # 天气 forecast 更新慢 · 不需要 5min · 减 API 压力
 if (( minute % 15 == 0 )); then
