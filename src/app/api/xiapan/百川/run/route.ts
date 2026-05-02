@@ -61,6 +61,46 @@ async function pullEthSignals(): Promise<SignalSourceResult> {
   }
 }
 
+// V0.72 W2 · 拉 SOL 信号 (BS + cross-tenor + cross-platform)
+async function pullSolSignals(): Promise<SignalSourceResult> {
+  try {
+    const r = await fetch(`${URL_PREFIX}/api/xiapan/sol-edges`, { cache: "no-store" }).then(
+      (r) => r.json()
+    );
+    if (!r.ok) return { source: "sol-edges", signals: [] };
+    const md = new Map<string, { vol_24: number; spread_c: number; market_p: number }>();
+    for (const e of r.edges ?? []) {
+      md.set(e.ticker, { vol_24: e.vol_24, spread_c: e.spread_c, market_p: e.market_p });
+    }
+    return { source: "sol-edges", signals: (r.signals ?? []) as Signal[], market_data: md };
+  } catch {
+    return { source: "sol-edges", signals: [] };
+  }
+}
+
+// V0.72 W2 · 拉 FDA 信号 (AdCom 投票后 · 凸性桶)
+async function pullFdaSignals(): Promise<SignalSourceResult> {
+  try {
+    const r = await fetch(`${URL_PREFIX}/api/xiapan/fda-edges`, { cache: "no-store" }).then(
+      (r) => r.json()
+    );
+    if (!r.ok) return { source: "fda-edges", signals: [] };
+    const md = new Map<string, { vol_24: number; spread_c: number; market_p: number }>();
+    for (const e of r.edges ?? []) {
+      if (e.market_p !== undefined && e.meeting?.kalshi_ticker) {
+        md.set(e.meeting.kalshi_ticker, {
+          vol_24: e.vol_24 ?? 0,
+          spread_c: e.spread_c ?? 0,
+          market_p: e.market_p,
+        });
+      }
+    }
+    return { source: "fda-edges", signals: (r.signals ?? []) as Signal[], market_data: md };
+  } catch {
+    return { source: "fda-edges", signals: [] };
+  }
+}
+
 // V0.72 · 拉 weather 信号 (NWS + Open-Meteo)
 async function pullWeatherSignals(): Promise<SignalSourceResult> {
   try {
@@ -90,6 +130,7 @@ interface FusionRunResult {
 // 信号源 → 桶映射
 function bucketFor(sources: string[]): "stable" | "convex" {
   // BS / 跨期限 / 跨平台 / 期货 / 天气 → 稳赚
+  // 稳赚 (S 池) · 数学背书 / 跨平台 / 公允价
   const stableSources = new Set([
     "btc-bs",
     "btc-cross-tenor",
@@ -97,12 +138,16 @@ function bucketFor(sources: string[]): "stable" | "convex" {
     "eth-bs",
     "eth-cross-tenor",
     "eth-cross-platform",
+    "sol-bs",
+    "sol-cross-tenor",
+    "sol-cross-platform",
     "fed-futures",
     "weather-nws",
     "weather-meteo",
     "earnings-consensus",
-    "fda-adcom",
   ]);
+  // 凸性 (C 池) · 高 EV 但低 hit · 长尾押注
+  // fda-adcom / phase3 / mention-engine / yn-signals / breaking-news 都进 convex
   const allStable = sources.every((s) => stableSources.has(s));
   return allStable ? "stable" : "convex";
 }
@@ -145,7 +190,9 @@ export async function GET(req: Request) {
   const sources = await Promise.all([
     pullBtcSignals(),
     pullEthSignals(),
+    pullSolSignals(),
     pullWeatherSignals(),
+    pullFdaSignals(),
   ]);
 
   // 1.5 加载当前权重 (Brier 自适应过的)

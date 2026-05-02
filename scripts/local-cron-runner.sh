@@ -101,10 +101,16 @@ if [[ "$hour" == "12" && "$minute" == "00" ]]; then
   ping_one "/api/xiapan/百川/health?cron=1" "[12:00] 百川-health"
 fi
 
-# V0.72 · 每 5 分钟 · BTC + ETH BS 公允价扫 (W1/W2 信号源)
+# V0.72 · 每 5 分钟 · BTC + ETH + SOL BS 公允价扫 (W1/W2 信号源)
 if (( minute % 5 == 0 )); then
   ping_one "/api/xiapan/btc-edges" "[5min] btc-edges"
   ping_one "/api/xiapan/eth-edges" "[5min] eth-edges"
+  ping_one "/api/xiapan/sol-edges" "[5min] sol-edges"
+fi
+
+# V0.72 W2 · 每 30 分钟 · FDA AdCom 凸性信号 (C 池)
+if (( minute % 30 == 0 )); then
+  ping_one "/api/xiapan/fda-edges" "[30min] fda-edges"
 fi
 
 # V0.72 · 每 15 分钟 · 天气 NWS+Meteo (W1 Day 5 信号源)
