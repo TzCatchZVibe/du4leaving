@@ -121,6 +121,7 @@ export async function POST(req: Request) {
       "  · 月底分钱报告\n" +
       "  · 系统异常\n\n" +
       "进阶 (你想看时) ·\n" +
+      "  /策略 · 看 15 策略实时分配\n" +
       "  /训   · ML 自进化训练 (周日 23:00 自动)\n\n" +
       "其他 21 旧命令仍能用 · 但建议忘掉\n" +
       "(/btc /eth /sol /weather /fda 等都还在 · 但 /钱 /信号 已包含)",
@@ -374,6 +375,46 @@ export async function POST(req: Request) {
       } else {
         await sendTelegramMessage(`✓ 教程已推送 (${r.sent} 页)`, { chatId, parseMode: undefined });
       }
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // V0.72 W3 Day 10 · /策略 · 看 15 策略实时分配
+  if (text === "/策略" || text === "/strategies") {
+    try {
+      const r = await fetch("http://localhost:3001/api/xiapan/baichuan/strategies", { signal: AbortSignal.timeout(60_000) }).then(r => r.json());
+      if (!r.ok) {
+        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const lines = [
+        `📋 ${r.strategies.length} 策略 · $${r.bankroll.toFixed(0)} 自动分配`,
+        ``,
+        `当前活跃 ${r.diversification.total_eligible} / 已分配 ${r.diversification.allocated}`,
+        ``,
+      ];
+      const allocated = r.strategies.filter((s: { suggested_pct: number }) => s.suggested_pct > 0);
+      const idle = r.strategies.filter((s: { suggested_pct: number }) => s.suggested_pct === 0);
+
+      lines.push("分到钱的 ·");
+      for (const s of allocated.slice(0, 10)) {
+        const pct = s.suggested_pct.toFixed(0);
+        const usd = s.suggested_usd.toFixed(0);
+        lines.push(`${s.strategy.emoji} ${s.strategy.name}\n   ${pct}% · $${usd} · ${s.current_signals}信号 · ${s.reason}`);
+      }
+      if (idle.length > 0) {
+        lines.push(``, `等待中 (无信号或不符合) ·`);
+        for (const s of idle.slice(0, 5)) {
+          lines.push(`${s.strategy.emoji} ${s.strategy.name} · ${s.reason}`);
+        }
+      }
+      if (r.warnings && r.warnings.length > 0) {
+        lines.push(``, `⚠ 警告 ·`);
+        for (const w of r.warnings) lines.push(`  · ${w}`);
+      }
+      await sendTelegramMessage(lines.join("\n\n"), { chatId, parseMode: undefined });
     } catch (e) {
       await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
     }
