@@ -12,6 +12,8 @@ import { readPools, debitFromPool } from "@/lib/xiapan/百川/pools";
 import { checkRealtimeCircuit } from "@/lib/xiapan/百川/allocator";
 import { appendLesson } from "@/lib/xiapan/百川/lessons";
 import { loadWeights } from "@/lib/xiapan/百川/weights";
+import { predictML } from "@/lib/xiapan/百川/ml/predict";
+import { inferBoard } from "@/lib/xiapan/百川/ml/features";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -220,6 +222,8 @@ function bucketFor(sources: string[]): "stable" | "convex" {
     "contrarian",            // 反公众 · 全品类共用 · 进 stable (低 conf 但稳)
     "nba-elo",               // NBA Elo
     "fed-cross-platform",    // 经济跨平台
+    // V0.72 W3 Day 9 · ML 自训模型 · 进 stable (有数据训 · 数学背书)
+    "ml-btc", "ml-eth", "ml-sol", "ml-weather", "ml-nba", "ml-fed", "ml-fda", "ml-other",
   ]);
   // 凸性 (C 池) · 高 EV 但低 hit · 长尾押注
   // fda-adcom / phase3 / mention-engine / yn-signals / breaking-news 都进 convex
@@ -350,6 +354,43 @@ export async function GET(req: Request) {
   for (const [ticker, signals] of byTicker) {
     const md = allMarketData.get(ticker);
     if (!md) continue;
+
+    // V0.72 W3 Day 9 · ML 预测 · 若该板块有训好的模型 · 加 ml-{board} 信号
+    const board = inferBoard(ticker);
+    const mlPred = predictML({
+      ts: new Date().toISOString(),
+      ticker,
+      bucket: bucketFor(signals.map((s) => s.source)),
+      side: "yes",
+      signals_active: signals.map((s) => s.source),
+      predicted_p: signals[0]?.predicted_p ?? md.market_p,
+      fusion_p: signals[0]?.predicted_p ?? md.market_p,
+      market_implied_p: md.market_p,
+      edge_pp: ((signals[0]?.predicted_p ?? md.market_p) - md.market_p) * 100,
+      n_active: signals.length,
+      stake: 1,
+      qty: 1,
+      entry_c: Math.round(md.market_p * 100),
+    });
+    if (mlPred.has_model && mlPred.ml_p !== null && mlPred.brier_val !== null) {
+      const mlEdge = mlPred.ml_p - md.market_p;
+      if (Math.abs(mlEdge) >= 0.03) {
+        // ML conf · 从 brier_val 反推 (越低越准)
+        // brier 0.20 → conf 0.65 · 0.25 → 0.55
+        const conf = Math.max(0.51, Math.min(0.85, 0.85 - mlPred.brier_val * 1.2));
+        signals.push({
+          source: `ml-${board}`,
+          ticker,
+          direction: mlEdge >= 0 ? 1 : -1,
+          predicted_p: mlPred.ml_p,
+          confidence: conf,
+          reason: `ML logreg ${board} · n=${mlPred.n_train} · val_brier=${mlPred.brier_val.toFixed(3)} · ml_p=${(mlPred.ml_p * 100).toFixed(1)}%`,
+          ts: new Date().toISOString(),
+          data: { board, val_brier: mlPred.brier_val },
+        });
+      }
+    }
+
     const sourcesArr = signals.map((s) => s.source);
     const bucket = bucketFor(sourcesArr);
 

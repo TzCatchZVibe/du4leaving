@@ -120,6 +120,8 @@ export async function POST(req: Request) {
       "  · 第一笔真单成功\n" +
       "  · 月底分钱报告\n" +
       "  · 系统异常\n\n" +
+      "进阶 (你想看时) ·\n" +
+      "  /训   · ML 自进化训练 (周日 23:00 自动)\n\n" +
       "其他 21 旧命令仍能用 · 但建议忘掉\n" +
       "(/btc /eth /sol /weather /fda 等都还在 · 但 /钱 /信号 已包含)",
       { chatId, parseMode: undefined }
@@ -372,6 +374,36 @@ export async function POST(req: Request) {
       } else {
         await sendTelegramMessage(`✓ 教程已推送 (${r.sent} 页)`, { chatId, parseMode: undefined });
       }
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // V0.72 W3 Day 9 · /训 · 自进化模型训练触发
+  if (text === "/训" || text === "/train") {
+    try {
+      const r = await fetch("http://localhost:3001/api/xiapan/baichuan/train", { signal: AbortSignal.timeout(120_000) }).then(r => r.json());
+      if (!r.ok) {
+        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const s = r.summary;
+      const lines = [
+        `🧠 ML 训练 · ${s.duration_ms}ms`,
+        ``,
+        `板块 ${s.total_boards} · 训 ${s.trained} · 跳 ${s.skipped} · 拒 ${s.rejected}`,
+        ``,
+      ];
+      for (const result of r.results) {
+        const icon = result.status === "trained" ? "✓" : result.status === "skipped" ? "·" : "✗";
+        const detail = result.status === "trained"
+          ? `n=${result.n_samples} · brier=${result.val_brier?.toFixed(3)} · auc=${result.val_auc?.toFixed(2)} · 改进+${result.improvement?.toFixed(3)}`
+          : `n=${result.n_samples} · ${result.reason}`;
+        lines.push(`${icon} ${result.board}: ${detail}`);
+      }
+      lines.push(``, "数据 ≥ 100/板块 才训 · 改进 ≥ 0.01 brier 才存");
+      await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
     } catch (e) {
       await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
     }

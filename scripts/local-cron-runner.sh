@@ -101,6 +101,12 @@ if (( dow == 0 && hour == 22 && minute == 30 )); then
   ping_one "/api/xiapan/baichuan/brier?cron=1" "[Sun 22:30] 百川-brier"
 fi
 
+# V0.72 W3 Day 9 · 每周日 23:00 · 自进化 ML 训练
+# 在 Brier 校准后 · weights 调好再训模型
+if (( dow == 0 && hour == 23 && minute == 0 )); then
+  ping_one "/api/xiapan/baichuan/train?cron=1" "[Sun 23:00] 百川-train (ML)"
+fi
+
 # V0.72 · 每天 12:00 · 百川健康检查 · 异常 push Telegram
 if [[ "$hour" == "12" && "$minute" == "00" ]]; then
   ping_one "/api/xiapan/baichuan/health?cron=1" "[12:00] 百川-health"
