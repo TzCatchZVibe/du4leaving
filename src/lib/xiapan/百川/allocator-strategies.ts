@@ -13,6 +13,7 @@ import { STRATEGIES, type Strategy } from "./strategies";
 import { readPools } from "./pools";
 import { loadWeights } from "./weights";
 import { readAllLessons } from "./lessons";
+import { isAutoCategory } from "./preferences";
 
 const baseURL = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3001";
 const URL_PREFIX = baseURL.startsWith("http") ? baseURL : `https://${baseURL}`;
@@ -92,8 +93,11 @@ export async function allocateStrategies(opts: AllocateOpts): Promise<{
     const wins = part.filter((l) => l.actual === 1).length;
     const recent_wr = recent_n > 0 ? wins / recent_n : 0;
 
-    // eligible · 当前有信号 OR 是套利型 (随机活跃)
-    const eligible = current_signals > 0 || strategy.bucket === "stable";
+    // C 模式 · 用户偏好品类不让 AI 碰
+    const is_auto = isAutoCategory(strategy.board);
+
+    // eligible · 当前有信号 OR 是套利型 (随机活跃) · 且不在 user_categories
+    const eligible = is_auto && (current_signals > 0 || strategy.bucket === "stable");
 
     // expected EV · 基于历史 wr (如有) 或 strategy 元数据 (好月化)
     const ev_from_history = recent_n >= 10 ? (recent_wr - 0.5) * 100 : NaN;
@@ -112,7 +116,7 @@ export async function allocateStrategies(opts: AllocateOpts): Promise<{
       eligible,
       reason: eligible
         ? (current_signals > 0 ? `${current_signals} 信号活跃 · 历史 wr ${(recent_wr * 100).toFixed(0)}%` : "套利型 · 长期可触发")
-        : "前置条件不满足",
+        : (!is_auto ? `用户品类 (${strategy.board}) · TZ 自己玩 · AI 不碰` : "前置条件不满足"),
       current_signals,
       current_weight,
       recent_n_closed: recent_n,

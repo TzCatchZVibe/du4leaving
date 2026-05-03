@@ -25,6 +25,12 @@ interface TgUpdate {
     chat?: { id?: number };
     text?: string;
   };
+  callback_query?: {
+    id: string;
+    from: { id?: number; username?: string };
+    message?: { message_id?: number; chat?: { id?: number } };
+    data?: string;
+  };
 }
 
 const SAGE_SYSTEM = `你是 Theo · Strategist · TZ 的押注顾问 (Telegram 接口版)
@@ -86,6 +92,47 @@ export async function POST(req: Request) {
   let update: TgUpdate;
   try { update = (await req.json()) as TgUpdate; }
   catch { return NextResponse.json({ ok: true, skipped: "bad json" }); }
+
+  // V0.73 W1 Day 4 · D 模式 · callback_query 处理 · inline 按钮回调
+  const cbq = update.callback_query;
+  if (cbq && cbq.data) {
+    const allowedChatId = process.env.TELEGRAM_CHAT_ID;
+    const cbChatId = cbq.message?.chat?.id;
+    if (allowedChatId && cbChatId && String(cbChatId) !== allowedChatId) {
+      return NextResponse.json({ ok: true, skipped: "unauthorized callback" });
+    }
+    const m = cbq.data.match(/^(confirm|reject)_([\w]+)$/);
+    if (!m) {
+      return NextResponse.json({ ok: true, skipped: "bad callback_data" });
+    }
+    const action = m[1];
+    const id = m[2];
+    try {
+      const r = await fetch("http://localhost:3001/api/xiapan/baichuan/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, action }),
+      }).then((r) => r.json());
+      const reply = r.ok
+        ? (action === "confirm"
+            ? `✓ 已确认 · 下次 cron 真下单 · id ${id}`
+            : `✗ 已拒绝 · id ${id}`)
+        : `✗ ${r.error || "处理失败"}`;
+      if (cbChatId) await sendTelegramMessage(reply, { chatId: String(cbChatId), parseMode: undefined });
+      // 关 callback (telegram 要求 answer)
+      const token = process.env.TELEGRAM_BOT_TOKEN;
+      if (token) {
+        await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ callback_query_id: cbq.id, text: action === "confirm" ? "已确认" : "已拒绝" }),
+        });
+      }
+    } catch (e) {
+      console.error("callback handler 失败 ·", (e as Error).message);
+    }
+    return NextResponse.json({ ok: true });
+  }
 
   const msg = update.message;
   if (!msg || !msg.text || !msg.chat?.id) {
@@ -157,6 +204,127 @@ export async function POST(req: Request) {
       await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
     } catch (e) {
       await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // V0.73 W1 Day 3 · /品类 · C 模式 · 看 / 改 user vs auto 品类
+  if (text.startsWith("/品类") || text.startsWith("/categories")) {
+    const arg = text.replace(/^\/(品类|categories)\s*/, "").trim();
+    try {
+      // 看 ·
+      if (!arg) {
+        const r = await fetch("http://localhost:3001/api/xiapan/baichuan/preferences").then(r => r.json());
+        const lines = [
+          `📂 品类偏好`,
+          ``,
+          `🎮 你自己玩 (AI 不碰) ·`,
+          `  ${r.user_categories.join(" · ")}`,
+          ``,
+          `🤖 AI 自动跑 ·`,
+          `  ${r.auto_categories.join(" · ")}`,
+          ``,
+          `更新于 · ${r.updated_at?.slice(0, 19) || "never"}`,
+          ``,
+          `改 · /品类 user tennis,nba`,
+          `改 · /品类 auto btc,eth,fda`,
+        ];
+        await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      // 改 ·
+      const m = arg.match(/^(user|auto)\s+(.+)$/);
+      if (!m) {
+        await sendTelegramMessage("用法 · /品类 user tennis,nba 或 /品类 auto btc,eth", { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const which = m[1] === "user" ? "user_categories" : "auto_categories";
+      const items = m[2].split(/[,，\s]+/).map(s => s.trim()).filter(Boolean);
+      const r = await fetch("http://localhost:3001/api/xiapan/baichuan/preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [which]: items }),
+      }).then(r => r.json());
+      await sendTelegramMessage(`✓ ${which} = ${items.join(" · ")}`, { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // V0.73 W1 Day 2 · /推荐 · B 模式 · 每日 5 +EV 推荐
+  if (text.startsWith("/推荐") || text.startsWith("/picks")) {
+    try {
+      const r = await fetch(
+        "http://localhost:3001/api/xiapan/baichuan/picks?limit=5&min_ev=5",
+        { signal: AbortSignal.timeout(60_000) }
+      ).then(r => r.json());
+      if (!r.ok) {
+        await sendTelegramMessage(`✗ ${r.error || "未知错误"}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const lines = [
+        `📊 今日 Top ${r.winners.length} +EV 推荐 (≥ ${r.min_ev}% EV)`,
+        `扫 ${r.scanned} · 估值 ${r.estimated} · 命中 ${r.winners_count}`,
+        ``,
+      ];
+      if (r.winners.length === 0) {
+        lines.push("当前没明显 +EV · 等下次扫");
+      } else {
+        for (const w of r.winners) {
+          lines.push(`${w.ticker}`);
+          lines.push(`  ${w.title}`);
+          lines.push(`  ${(w.last_price*100).toFixed(0)}¢ → 估 ${(w.fair_prob*100).toFixed(0)}% · +EV ${w.ev_pct.toFixed(1)}%`);
+          lines.push(`  ${w.reason}`);
+          lines.push(``);
+        }
+      }
+      await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ /推荐 失败 · ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // V0.73 W1 Day 1 · /分析 · A 模式 · 任意 Kalshi ticker / URL → AI 估公允价 + EV
+  if (text.startsWith("/分析") || text.startsWith("/analyze")) {
+    const arg = text.replace(/^\/(分析|analyze)\s*/, "").trim();
+    if (!arg) {
+      await sendTelegramMessage(
+        "用法 · /分析 <ticker 或 Kalshi URL>\n例 · /分析 KXWTACHALLENGERMATCH-26MAY03PANWON",
+        { chatId, parseMode: undefined }
+      );
+      return NextResponse.json({ ok: true });
+    }
+    try {
+      const url = `http://localhost:3001/api/xiapan/baichuan/analyze?ticker=${encodeURIComponent(arg)}`;
+      const r = await fetch(url, { signal: AbortSignal.timeout(45_000) }).then(r => r.json());
+      if (!r.ok) {
+        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const lines = [
+        `📊 ${r.ticker}`,
+        r.title ? r.title.slice(0, 80) : "",
+        ``,
+        `状态 · ${r.market_status}${r.result ? ` · result=${r.result}` : ""}`,
+        `当前 · ${(r.last_price * 100).toFixed(0)}¢ (bid ${(r.yes_bid*100).toFixed(0)} / ask ${(r.yes_ask*100).toFixed(0)})`,
+        `成交 24h · ${r.volume_24h}`,
+      ];
+      if (r.warnings && r.warnings.length) {
+        lines.push(``, `⚠️ ${r.warnings.join(" · ")}`);
+      }
+      if (r.fair_prob != null) {
+        lines.push(``, `🎯 LLM 估真概率 · ${(r.fair_prob * 100).toFixed(0)}%`);
+        if (r.ev_pct != null) {
+          lines.push(`   EV · ${r.ev_pct >= 0 ? "+" : ""}${r.ev_pct}%`);
+        }
+      }
+      lines.push(``, `→ ${r.recommendation}`);
+      if (r.reasoning) lines.push(``, `理由 · ${r.reasoning}`);
+      await sendTelegramMessage(lines.filter(Boolean).join("\n"), { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ /分析 失败 · ${(e as Error).message}`, { chatId, parseMode: undefined });
     }
     return NextResponse.json({ ok: true });
   }
