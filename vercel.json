@@ -39,6 +39,10 @@
     {
       "path": "/api/xiapan/paper-trade?action=tick&cron=1",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/xiapan/baichuan/picks-push?cron=1",
+      "schedule": "0 14 * * *"
     }
   ]
 }
