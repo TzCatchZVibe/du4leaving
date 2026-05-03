@@ -79,7 +79,18 @@ async function callSage(question: string): Promise<{ text: string; provider: str
   return last;
 }
 
+// V0.73 W1 Day 4 · 跨环境 base URL · Vercel 用 host header · 本地 fallback :3001
+function getBaseUrl(req: Request): string {
+  const host = req.headers.get("host");
+  if (host) {
+    const proto = req.headers.get("x-forwarded-proto") || (host.includes("localhost") ? "http" : "https");
+    return `${proto}://${host}`;
+  }
+  return "http://localhost:3001";
+}
+
 export async function POST(req: Request) {
+  const BASE = getBaseUrl(req);
   // 验 secret · TG setWebhook 时配的 secret_token 会塞 header
   const expected = process.env.TELEGRAM_WEBHOOK_SECRET;
   if (expected) {
@@ -108,7 +119,7 @@ export async function POST(req: Request) {
     const action = m[1];
     const id = m[2];
     try {
-      const r = await fetch("http://localhost:3001/api/xiapan/baichuan/confirm", {
+      const r = await fetch(`${BASE}/api/xiapan/baichuan/confirm`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, action }),
@@ -214,7 +225,7 @@ export async function POST(req: Request) {
     try {
       // 看 ·
       if (!arg) {
-        const r = await fetch("http://localhost:3001/api/xiapan/baichuan/preferences").then(r => r.json());
+        const r = await fetch(`${BASE}/api/xiapan/baichuan/preferences`).then(r => r.json());
         const lines = [
           `📂 品类偏好`,
           ``,
@@ -240,7 +251,7 @@ export async function POST(req: Request) {
       }
       const which = m[1] === "user" ? "user_categories" : "auto_categories";
       const items = m[2].split(/[,，\s]+/).map(s => s.trim()).filter(Boolean);
-      const r = await fetch("http://localhost:3001/api/xiapan/baichuan/preferences", {
+      const r = await fetch(`${BASE}/api/xiapan/baichuan/preferences`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ [which]: items }),
@@ -256,7 +267,7 @@ export async function POST(req: Request) {
   if (text.startsWith("/推荐") || text.startsWith("/picks")) {
     try {
       const r = await fetch(
-        "http://localhost:3001/api/xiapan/baichuan/picks?limit=5&min_ev=5",
+        `${BASE}/api/xiapan/baichuan/picks?limit=5&min_ev=5`,
         { signal: AbortSignal.timeout(60_000) }
       ).then(r => r.json());
       if (!r.ok) {
@@ -297,7 +308,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true });
     }
     try {
-      const url = `http://localhost:3001/api/xiapan/baichuan/analyze?ticker=${encodeURIComponent(arg)}`;
+      const url = `${BASE}/api/xiapan/baichuan/analyze?ticker=${encodeURIComponent(arg)}`;
       const r = await fetch(url, { signal: AbortSignal.timeout(45_000) }).then(r => r.json());
       if (!r.ok) {
         await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
