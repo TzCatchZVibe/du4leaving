@@ -1,132 +1,127 @@
-// /api/xiapan/baichuan/picks · B · 每日 5 单 +EV 推荐 endpoint
-// V0.73 W1 Day 2 · 4 模式 co-pilot 第 2 模式
+// /api/xiapan/baichuan/picks · B 模式 · 每日 5 单 +EV 推荐
+// V0.73 W1 D5 修 · 不调 LLM 估值 · 调 du4leaving 真信号 pipeline
 //
-// 用法 ·
-//   GET /api/xiapan/baichuan/picks?limit=5&min_ev=5&series=KXBTCDAILY,KXWTACHALLENGERMATCH
-//   默认 · 6 系列扫 · top 5 +EV ≥ 5%
+// 调 ·
+//   GET /api/xiapan/baichuan/picks?limit=5&min_ev=12
 
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 90;
 
-const KALSHI = "https://api.elections.kalshi.com/trade-api/v2";
-
-const DEFAULT_SERIES = [
-  "KXBTCDAILY",
-  "KXETHDAILY",
-  "KXSOLDAILY",
-  "KXWTACHALLENGERMATCH",
-  "KXATPCHALLENGERMATCH",
-  "KXUSPRESELECT",
+// du4leaving 真信号源 endpoint (相对路径 · 走 BASE)
+// 每个返回 { edges: BtcEdge[], signals: Signal[] } · 我们用 edges 拿 fair_p / market_p / vol_24
+const SIGNAL_SOURCES = [
+  "btc-edges",        // BS 公允价 + 跨期 + 跨平台
+  "eth-edges",
+  "sol-edges",
+  "weather-edges",    // NWS + Open-Meteo 双源
+  "nba-edges",        // 538 Elo
+  "fed-edges",        // 利率共识
+  "fda-edges",        // 凸性策略
+  "mention-edges",    // 实时名人嘴瓢 (这里 LLM 合理用)
+  "contrarian-edges", // vol skew 反公众
 ];
 
-async function listOpenMarkets(seriesTicker: string, limit = 10): Promise<any[]> {
-  const url = `${KALSHI}/events?series_ticker=${seriesTicker}&status=open&limit=${limit}`;
-  const res = await fetch(url, { headers: { Accept: "application/json" } });
-  if (!res.ok) return [];
-  const d = await res.json();
-  const markets: any[] = [];
-  for (const ev of d.events || []) {
-    const evRes = await fetch(`${KALSHI}/events/${ev.event_ticker}`, { headers: { Accept: "application/json" } });
-    if (!evRes.ok) continue;
-    const evData = await evRes.json();
-    for (const m of evData.markets || []) {
-      if (["active", "open", "initialized"].includes(m.status)) {
-        markets.push({ ...m, _event_title: evData.event?.title });
-      }
-    }
-  }
-  return markets;
+interface UnifiedEdge {
+  ticker: string;
+  title?: string;
+  source: string;             // btc-edges / weather-edges / ...
+  fair_prob: number;          // 0-1 (yes 真概率)
+  market_prob: number;        // 0-1
+  edge_pp: number;            // (fair - market) * 100
+  side: "yes" | "no";
+  vol_24: number;
+  spread_c: number;
+  reasoning: string;
 }
 
-async function llmEstimate(market: any): Promise<{ fairProb: number; reason: string } | null> {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) return null;
-  const lastPrice = (market.last_price ?? 0) / 100;
-  const prompt = `预测市场分析师 · 估 YES 真概率。
+function getBaseUrl(req: Request): string {
+  const host = req.headers.get("host");
+  if (host) {
+    const proto = req.headers.get("x-forwarded-proto") || (host.includes("localhost") ? "http" : "https");
+    return `${proto}://${host}`;
+  }
+  return "http://localhost:3001";
+}
 
-市场 · ${market.ticker}
-事件 · ${market._event_title || ""}
-问题 · ${market.title}
-押 YES · ${market.yes_sub_title}
-当前 · ${(lastPrice * 100).toFixed(0)}¢
-
-返回 JSON · 无别的 ·
-{"prob": <0-100 整数>, "reason": "<≤60 字>"}`;
+async function fetchSource(BASE: string, path: string): Promise<UnifiedEdge[]> {
   try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.2,
-        max_tokens: 150,
-        response_format: { type: "json_object" },
-      }),
-    });
-    if (!res.ok) return null;
-    const d = await res.json();
-    const text = d.choices?.[0]?.message?.content || "{}";
-    const parsed = JSON.parse(text);
-    if (typeof parsed.prob !== "number") return null;
-    return { fairProb: parsed.prob / 100, reason: parsed.reason || "" };
+    const r = await fetch(`${BASE}/api/xiapan/${path}`, { signal: AbortSignal.timeout(20_000) });
+    if (!r.ok) return [];
+    const d = await r.json();
+    const edges = d.edges || [];
+    const out: UnifiedEdge[] = [];
+    for (const e of edges) {
+      const fair = Number(e.fair_p ?? e.fair_prob ?? NaN);
+      const mkt = Number(e.market_p ?? e.market_prob ?? NaN);
+      if (isNaN(fair) || isNaN(mkt)) continue;
+      if (mkt <= 0 || mkt >= 1) continue;
+      const edgePp = (fair - mkt) * 100;
+      out.push({
+        ticker: e.ticker,
+        title: e.title || "",
+        source: path,
+        fair_prob: fair,
+        market_prob: mkt,
+        edge_pp: edgePp,
+        side: edgePp >= 0 ? "yes" : "no",
+        vol_24: Number(e.vol_24 ?? e.volume_24h ?? 0),
+        spread_c: Number(e.spread_c ?? 0),
+        reasoning: e.reason || `${path} 数学公允价偏差`,
+      });
+    }
+    return out;
   } catch {
-    return null;
+    return [];
   }
 }
 
 export async function GET(req: Request) {
+  const BASE = getBaseUrl(req);
   const url = new URL(req.url);
   const limit = parseInt(url.searchParams.get("limit") || "5");
-  const minEv = parseFloat(url.searchParams.get("min_ev") || "5");
-  const seriesArg = url.searchParams.get("series");
-  const series = seriesArg ? seriesArg.split(",") : DEFAULT_SERIES;
+  const minEvPp = parseFloat(url.searchParams.get("min_ev") || "12");
+  const minVol = parseFloat(url.searchParams.get("min_vol") || "50");
+  const maxSpread = parseFloat(url.searchParams.get("max_spread") || "5");
 
-  // 扫
-  const all: any[] = [];
-  for (const ser of series) {
-    const ms = await listOpenMarkets(ser, 8);
-    all.push(...ms);
-  }
+  // 并行扫所有真信号源
+  const lists = await Promise.all(SIGNAL_SOURCES.map((s) => fetchSource(BASE, s)));
+  const all: UnifiedEdge[] = [];
+  for (const l of lists) all.push(...l);
 
-  // LLM 估值 · 节流 5 个一批
-  const scored: any[] = [];
-  for (let i = 0; i < all.length; i += 5) {
-    const batch = all.slice(i, i + 5);
-    const results = await Promise.all(batch.map(async (m) => {
-      const lastPrice = (m.last_price ?? 0) / 100;
-      if (lastPrice <= 0 || lastPrice >= 1) return null;
-      const est = await llmEstimate(m);
-      if (!est || est.fairProb == null) return null;
-      const evPct = ((est.fairProb - lastPrice) / lastPrice) * 100;
-      return {
-        ticker: m.ticker,
-        title: (m.title || "").slice(0, 80),
-        yes_subtitle: m.yes_sub_title,
-        last_price: lastPrice,
-        fair_prob: est.fairProb,
-        ev_pct: +evPct.toFixed(1),
-        reason: est.reason,
-        kalshi_url: `https://kalshi.com/markets?q=${encodeURIComponent(m.ticker)}`,
-      };
-    }));
-    scored.push(...results.filter(Boolean));
-  }
+  // 流动性 + spread 硬过滤
+  const liquid = all.filter(
+    (e) => e.vol_24 >= minVol && (e.spread_c === 0 || e.spread_c <= maxSpread)
+  );
 
-  const winners = scored
-    .filter((s) => s.ev_pct >= minEv)
-    .sort((a, b) => b.ev_pct - a.ev_pct)
+  // EV 阈值过滤 (绝对值)
+  const winners = liquid
+    .filter((e) => Math.abs(e.edge_pp) >= minEvPp)
+    .sort((a, b) => Math.abs(b.edge_pp) - Math.abs(a.edge_pp))
     .slice(0, limit);
 
   return NextResponse.json({
     ok: true,
     scanned: all.length,
-    estimated: scored.length,
+    after_liquidity_filter: liquid.length,
     winners_count: winners.length,
-    min_ev: minEv,
-    series,
-    winners,
+    min_ev_pp: minEvPp,
+    min_vol: minVol,
+    max_spread_c: maxSpread,
+    sources: SIGNAL_SOURCES,
+    winners: winners.map((w) => ({
+      ticker: w.ticker,
+      title: (w.title || "").slice(0, 80),
+      source: w.source,
+      side: w.side,
+      last_price: w.market_prob,
+      fair_prob: w.fair_prob,
+      ev_pct: +w.edge_pp.toFixed(1),
+      reason: w.reasoning,
+      vol_24: w.vol_24,
+      spread_c: w.spread_c,
+      kalshi_url: `https://kalshi.com/markets?q=${encodeURIComponent(w.ticker)}`,
+    })),
   });
 }

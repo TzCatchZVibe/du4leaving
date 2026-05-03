@@ -48,7 +48,7 @@ export async function GET(req: Request) {
   }
 
   try {
-    const r = await fetch(`${BASE}/api/xiapan/baichuan/picks?limit=5&min_ev=5`).then(r => r.json());
+    const r = await fetch(`${BASE}/api/xiapan/baichuan/picks?limit=5&min_ev=12&min_vol=50`).then(r => r.json());
     if (!r.ok || !r.winners || r.winners.length === 0) {
       const text = `📊 今日推荐 · 暂无 +EV 单 (扫 ${r.scanned || 0} · 估值 ${r.estimated || 0})`;
       await pushTelegram(text);
@@ -57,32 +57,35 @@ export async function GET(req: Request) {
     // 自动 record 为 paper pick · paper 验证模型
     let recorded = 0;
     for (const w of r.winners) {
+      // EV 加权仓位 ·  12pp → $0.5 · 20pp → $1.0 · 30pp+ → $1.5
+      const absEv = Math.abs(w.ev_pct);
+      const stake = absEv >= 30 ? 1.5 : absEv >= 20 ? 1.0 : 0.5;
       const rec = await recordPaperPick({
         pick_id: shortPickId(),
         ticker: w.ticker,
         title: w.title,
-        yes_subtitle: w.yes_subtitle,
-        side: "yes",                   // /推荐 默认押 yes (LLM 给的概率即 yes 方真概率)
-        entry_price: w.last_price,
+        side: w.side,                   // 真信号告诉 yes / no · 不再硬编码 yes
+        entry_price: w.side === "yes" ? w.last_price : (1 - w.last_price),
         fair_prob: w.fair_prob,
         ev_pct: w.ev_pct,
-        reasoning: w.reason,
+        reasoning: `[${w.source}] ${w.reason}`,
         source: "cron",
-        paper_stake_usd: 1.0,
+        paper_stake_usd: stake,
       });
       if (rec) recorded++;
     }
 
     const lines = [
-      `📊 早安 · 今日 Top ${r.winners.length} +EV 推荐 (≥ ${r.min_ev}% EV)`,
-      `扫 ${r.scanned} · 估 ${r.estimated} · 命中 ${r.winners_count} · paper ${recorded}`,
+      `📊 早安 · 今日 Top ${r.winners.length} +EV 推荐 (≥ ${r.min_ev_pp}pp EV · vol≥${r.min_vol})`,
+      `扫 ${r.scanned} · 流动性过 ${r.after_liquidity_filter} · 命中 ${r.winners_count} · paper ${recorded}`,
       ``,
     ];
     for (const w of r.winners) {
-      lines.push(`${w.ticker}`);
+      lines.push(`${w.ticker}  [${w.source}]`);
       lines.push(`  ${w.title}`);
-      lines.push(`  ${(w.last_price*100).toFixed(0)}¢ → ${(w.fair_prob*100).toFixed(0)}% · +EV ${w.ev_pct.toFixed(1)}%`);
-      lines.push(`  ${w.reason}`);
+      const sideTxt = w.side === "yes" ? `押 YES @ ${(w.last_price*100).toFixed(0)}¢` : `押 NO @ ${((1-w.last_price)*100).toFixed(0)}¢`;
+      lines.push(`  ${sideTxt} · 真概率 ${(w.fair_prob*100).toFixed(0)}% · ${w.ev_pct >= 0 ? '+' : ''}${w.ev_pct.toFixed(1)}pp edge`);
+      lines.push(`  vol ${w.vol_24} · ${w.reason}`);
       lines.push(`  → kalshi.com/markets?q=${encodeURIComponent(w.ticker)}`);
       lines.push(``);
     }
