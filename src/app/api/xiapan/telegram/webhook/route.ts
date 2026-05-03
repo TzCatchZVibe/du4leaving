@@ -219,6 +219,41 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
+  // V0.73 W1 Day 5 · /统计 · paper 战绩 · WR + ROI
+  if (text.startsWith("/统计") || text.startsWith("/stats")) {
+    const arg = text.replace(/^\/(统计|stats)\s*/, "").trim();
+    const days = arg ? parseInt(arg) || 7 : 7;
+    try {
+      const r = await fetch(`${BASE}/api/xiapan/baichuan/paper-stats?days=${days}`).then(r => r.json());
+      if (!r.ok) {
+        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const lines = [
+        `📊 paper 战绩 · 近 ${r.days} 天`,
+        ``,
+        `共 ${r.total} 单 · settled ${r.settled} · open ${r.open}`,
+        `WR · ${r.wr_pct}%  ·  ${r.wins} 赢 / ${r.losses} 输`,
+        `paper ROI · ${r.roi_pct >= 0 ? "+" : ""}${r.roi_pct}%`,
+        `paper PnL · ${r.total_pnl_usd >= 0 ? "+" : ""}$${r.total_pnl_usd}  (押 $${r.total_stake_usd})`,
+        ``,
+      ];
+      if (r.recent_5 && r.recent_5.length > 0) {
+        lines.push(`最近 5 单 ·`);
+        for (const x of r.recent_5) {
+          const status = x.status === "finalized"
+            ? (x.pnl > 0 ? "★" : x.pnl < 0 ? "✕" : "·")
+            : "○";
+          lines.push(`${status} ${x.ticker.slice(0, 35)} · ${x.side} · EV ${x.ev_pct?.toFixed(0)}% · ${x.pnl != null ? (x.pnl >= 0 ? "+" : "") + "$" + x.pnl.toFixed(2) : "持"}`);
+        }
+      }
+      await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ /统计 失败 · ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
   // V0.73 W1 Day 3 · /品类 · C 模式 · 看 / 改 user vs auto 品类
   if (text.startsWith("/品类") || text.startsWith("/categories")) {
     const arg = text.replace(/^\/(品类|categories)\s*/, "").trim();

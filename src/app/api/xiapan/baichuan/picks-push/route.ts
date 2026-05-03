@@ -2,6 +2,7 @@
 // V0.73 W1 Day 5
 
 import { NextResponse } from "next/server";
+import { recordPaperPick, shortPickId } from "@/lib/xiapan/百川/paper-picks";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 90;
@@ -53,9 +54,28 @@ export async function GET(req: Request) {
       await pushTelegram(text);
       return NextResponse.json({ ok: true, pushed: true, winners: 0 });
     }
+    // 自动 record 为 paper pick · paper 验证模型
+    let recorded = 0;
+    for (const w of r.winners) {
+      const rec = await recordPaperPick({
+        pick_id: shortPickId(),
+        ticker: w.ticker,
+        title: w.title,
+        yes_subtitle: w.yes_subtitle,
+        side: "yes",                   // /推荐 默认押 yes (LLM 给的概率即 yes 方真概率)
+        entry_price: w.last_price,
+        fair_prob: w.fair_prob,
+        ev_pct: w.ev_pct,
+        reasoning: w.reason,
+        source: "cron",
+        paper_stake_usd: 1.0,
+      });
+      if (rec) recorded++;
+    }
+
     const lines = [
       `📊 早安 · 今日 Top ${r.winners.length} +EV 推荐 (≥ ${r.min_ev}% EV)`,
-      `扫 ${r.scanned} · 估 ${r.estimated} · 命中 ${r.winners_count}`,
+      `扫 ${r.scanned} · 估 ${r.estimated} · 命中 ${r.winners_count} · paper ${recorded}`,
       ``,
     ];
     for (const w of r.winners) {
@@ -66,9 +86,9 @@ export async function GET(req: Request) {
       lines.push(`  → kalshi.com/markets?q=${encodeURIComponent(w.ticker)}`);
       lines.push(``);
     }
-    lines.push(`💡 1 屏看完 · 感兴趣点过去 Kalshi 手动下`);
+    lines.push(`💡 已记 paper · 用 /统计 看战绩 · 真钱另说`);
     await pushTelegram(lines.join("\n"));
-    return NextResponse.json({ ok: true, pushed: true, winners: r.winners.length });
+    return NextResponse.json({ ok: true, pushed: true, winners: r.winners.length, paper_recorded: recorded });
   } catch (e: any) {
     await pushTelegram(`✗ /推荐 cron 失败 · ${e.message}`);
     return NextResponse.json({ ok: false, error: e.message }, { status: 500 });

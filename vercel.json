@@ -43,6 +43,10 @@
     {
       "path": "/api/xiapan/baichuan/picks-push?cron=1",
       "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/xiapan/baichuan/paper-tick?cron=1",
+      "schedule": "*/30 * * * *"
     }
   ]
 }
