@@ -219,6 +219,131 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
+  // V0.74 W1 · 财富模块命令 · 净值 / 目标 / 入账 / 导出
+  if (text.startsWith("/净值") || text.startsWith("/networth")) {
+    try {
+      const r = await fetch(`${BASE}/api/wealth/networth?snapshot=1`).then(r => r.json());
+      if (!r.ok) {
+        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const sign = (v: number | undefined) => v == null ? "—" : v >= 0 ? `+$${v.toFixed(2)}` : `-$${Math.abs(v).toFixed(2)}`;
+      const lines = [
+        `💰 净值 · $${r.total_usd.toFixed(2)}`,
+        ``,
+        `── 按品类 ──`,
+      ];
+      const catEmoji: Record<string, string> = { bank: "🏦", crypto: "₿", prediction: "🎯", cash: "💵", goal: "🎯", broker: "📈", other: "📦" };
+      for (const [cat, amt] of Object.entries(r.by_category as Record<string, number>)) {
+        const e = catEmoji[cat] || "•";
+        lines.push(`  ${e} ${cat.padEnd(10)} · $${(amt as number).toFixed(2)}`);
+      }
+      lines.push(``);
+      lines.push(`── 趋势 ──`);
+      lines.push(`  vs 7 天前 · ${sign(r.delta_7d)}`);
+      lines.push(`  vs 30 天前 · ${sign(r.delta_30d)}`);
+      lines.push(``);
+      lines.push(`── 账户 (${r.account_count} 个) ──`);
+      for (const a of r.by_account.slice(0, 8)) {
+        lines.push(`  ${a.name.slice(0, 18).padEnd(18)} · $${a.balance.toFixed(2)}`);
+      }
+      await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ /净值 失败 · ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // /目标 · 阶段 1 #2 离目标多远
+  if (text.startsWith("/目标") || text.startsWith("/goals")) {
+    try {
+      const r = await fetch(`${BASE}/api/wealth/goals`).then(r => r.json());
+      if (!r.ok) {
+        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const lines = [`🎯 你的目标 · 离梦想多远`, ``];
+      for (const g of r.goals) {
+        const bar = "▰".repeat(Math.floor(g.pct / 10)) + "▱".repeat(10 - Math.floor(g.pct / 10));
+        lines.push(`${g.emoji} ${g.name}`);
+        lines.push(`  ${bar} ${g.pct.toFixed(0)}%`);
+        lines.push(`  $${Number(g.current_usd).toFixed(0)} / $${Number(g.target_usd).toFixed(0)}  ·  还差 $${g.remaining_usd.toFixed(0)}`);
+        if (g.months_to_deadline != null) {
+          lines.push(`  剩 ${g.months_to_deadline} 月  ·  月需 $${g.monthly_need_usd?.toFixed(0)}`);
+        }
+        lines.push(``);
+      }
+      await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ /目标 失败 · ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // /入 <slug> <amount> · 手动登记余额
+  if (text.startsWith("/入 ") || text.startsWith("/入账") || text.startsWith("/setbalance")) {
+    const arg = text.replace(/^\/(入账?|setbalance)\s*/, "").trim();
+    const m = arg.match(/^(\S+)\s+(\d+(?:\.\d+)?)\s*(.*)?$/);
+    if (!m) {
+      await sendTelegramMessage(
+        "用法 · /入 <账户slug> <金额> [备注]\n例 · /入 bank-checking 5000\n例 · /入 coinbase 1234.56 比特币只算今天\n看所有账户 · /账户",
+        { chatId, parseMode: undefined }
+      );
+      return NextResponse.json({ ok: true });
+    }
+    const [, slug, amt, notes] = m;
+    try {
+      const r = await fetch(`${BASE}/api/wealth/balance`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug, balance: parseFloat(amt), notes }),
+      }).then(r => r.json());
+      if (!r.ok) {
+        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      await sendTelegramMessage(`✓ 记 · ${r.account.name} · $${parseFloat(amt).toFixed(2)}`, { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // /账户 · 列所有
+  if (text.startsWith("/账户") || text.startsWith("/accounts")) {
+    try {
+      const r = await fetch(`${BASE}/api/wealth/balance`).then(r => r.json());
+      if (!r.ok) {
+        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const lines = ["📋 账户清单 · /入 <slug> <金额> 入账", ``];
+      for (const a of r.accounts) {
+        const status = a.active ? "" : " (停用)";
+        lines.push(`${a.slug}  ·  ${a.name}${status}`);
+        lines.push(`  category=${a.category} source=${a.source}`);
+      }
+      await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // /导出 · CSV 导出 · #22 去中心化承诺
+  if (text.startsWith("/导出") || text.startsWith("/export")) {
+    try {
+      const r = await fetch(`${BASE}/api/wealth/export`);
+      const csv = await r.text();
+      const lines = csv.split("\n");
+      const summary = `📦 导出 ${lines.length - 1} 行 CSV\n\n直接看 · ${BASE}/api/wealth/export\n\n首 5 行 ·\n${lines.slice(0, 5).join("\n").slice(0, 800)}`;
+      await sendTelegramMessage(summary, { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ /导出 失败 · ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
   // V0.73 W1 Day 5 · /统计 · paper 战绩 · WR + ROI
   if (text.startsWith("/统计") || text.startsWith("/stats")) {
     const arg = text.replace(/^\/(统计|stats)\s*/, "").trim();
