@@ -118,7 +118,30 @@ export async function settlePick(
   return { pnl_usd, pnl_pct };
 }
 
-// 统计 · 用于 /统计 命令
+function breakdown(picks: any[]) {
+  const total = picks.length;
+  const settled = picks.filter((p) => p.market_status === "finalized").length;
+  const open = total - settled;
+  const wins = picks.filter((p) => p.paper_pnl_usd && p.paper_pnl_usd > 0).length;
+  const losses = picks.filter((p) => p.paper_pnl_usd && p.paper_pnl_usd < 0).length;
+  const wr = settled > 0 ? (wins / settled) * 100 : 0;
+  const total_pnl = picks.reduce((s, p) => s + Number(p.paper_pnl_usd ?? 0), 0);
+  const total_stake = picks.reduce((s, p) => s + Number(p.paper_stake_usd ?? 0), 0);
+  const roi = total_stake > 0 ? (total_pnl / total_stake) * 100 : 0;
+  return {
+    total,
+    settled,
+    open,
+    wins,
+    losses,
+    wr_pct: +wr.toFixed(1),
+    total_pnl_usd: +total_pnl.toFixed(2),
+    total_stake_usd: +total_stake.toFixed(2),
+    roi_pct: +roi.toFixed(1),
+  };
+}
+
+// 统计 · 用于 /统计 命令 · 分 manual / cron 两栏
 export async function summary(days = 7): Promise<any> {
   try {
     const c = sb();
@@ -129,29 +152,17 @@ export async function summary(days = 7): Promise<any> {
       .gte("created_at", since)
       .order("created_at", { ascending: false });
     const picks = data || [];
-    const total = picks.length;
-    const settled = picks.filter((p: any) => p.market_status === "finalized").length;
-    const open = total - settled;
-    const wins = picks.filter((p: any) => p.paper_pnl_usd && p.paper_pnl_usd > 0).length;
-    const losses = picks.filter((p: any) => p.paper_pnl_usd && p.paper_pnl_usd < 0).length;
-    const wr = settled > 0 ? (wins / settled) * 100 : 0;
-    const total_pnl = picks.reduce((s: number, p: any) => s + Number(p.paper_pnl_usd ?? 0), 0);
-    const total_stake = picks.reduce((s: number, p: any) => s + Number(p.paper_stake_usd ?? 0), 0);
-    const roi = total_stake > 0 ? (total_pnl / total_stake) * 100 : 0;
+    const manual = picks.filter((p: any) => p.source === "manual");
+    const cron = picks.filter((p: any) => p.source === "cron" || p.source === "d-confirm");
     return {
       days,
-      total,
-      settled,
-      open,
-      wins,
-      losses,
-      wr_pct: +wr.toFixed(1),
-      total_pnl_usd: +total_pnl.toFixed(2),
-      total_stake_usd: +total_stake.toFixed(2),
-      roi_pct: +roi.toFixed(1),
+      ...breakdown(picks),
+      manual: breakdown(manual),
+      cron: breakdown(cron),
       recent_5: picks.slice(0, 5).map((p: any) => ({
         ticker: p.ticker,
         side: p.side,
+        source: p.source,
         ev_pct: p.ev_pct,
         status: p.market_status,
         result: p.market_result,

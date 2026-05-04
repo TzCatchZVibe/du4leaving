@@ -229,13 +229,21 @@ export async function POST(req: Request) {
         await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
         return NextResponse.json({ ok: true });
       }
+      const sign = (v: number) => v >= 0 ? `+$${v.toFixed(2)}` : `-$${Math.abs(v).toFixed(2)}`;
       const lines = [
         `📊 paper 战绩 · 近 ${r.days} 天`,
         ``,
-        `共 ${r.total} 单 · settled ${r.settled} · open ${r.open}`,
-        `WR · ${r.wr_pct}%  ·  ${r.wins} 赢 / ${r.losses} 输`,
-        `paper ROI · ${r.roi_pct >= 0 ? "+" : ""}${r.roi_pct}%`,
-        `paper PnL · ${r.total_pnl_usd >= 0 ? "+" : ""}$${r.total_pnl_usd}  (押 $${r.total_stake_usd})`,
+        `── 总计 ──`,
+        `${r.total} 单 · WR ${r.wr_pct}% · ROI ${r.roi_pct}%`,
+        `押 $${r.total_stake_usd} · ${sign(r.total_pnl_usd)}`,
+        ``,
+        `── 你手动 (manual) ──`,
+        `${r.manual.total} 单 · WR ${r.manual.wr_pct}% · ROI ${r.manual.roi_pct}%`,
+        `押 $${r.manual.total_stake_usd} · ${sign(r.manual.total_pnl_usd)}`,
+        ``,
+        `── 系统自动 (cron) ──`,
+        `${r.cron.total} 单 · WR ${r.cron.wr_pct}% · ROI ${r.cron.roi_pct}%`,
+        `押 $${r.cron.total_stake_usd} · ${sign(r.cron.total_pnl_usd)}`,
         ``,
       ];
       if (r.recent_5 && r.recent_5.length > 0) {
@@ -244,7 +252,8 @@ export async function POST(req: Request) {
           const status = x.status === "finalized"
             ? (x.pnl > 0 ? "★" : x.pnl < 0 ? "✕" : "·")
             : "○";
-          lines.push(`${status} ${x.ticker.slice(0, 35)} · ${x.side} · EV ${x.ev_pct?.toFixed(0)}% · ${x.pnl != null ? (x.pnl >= 0 ? "+" : "") + "$" + x.pnl.toFixed(2) : "持"}`);
+          const src = x.source === "manual" ? "手" : "自";
+          lines.push(`${status} [${src}] ${x.ticker.slice(0, 30)} · ${x.side} · ${x.pnl != null ? sign(x.pnl) : "持"}`);
         }
       }
       await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
