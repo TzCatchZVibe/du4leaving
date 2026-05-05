@@ -5,8 +5,12 @@
       "schedule": "0 */6 * * *"
     },
     {
-      "path": "/api/wealth/wrapped/push?cron=1&offset=-1",
-      "schedule": "0 14 1 * *"
+      "path": "/api/wealth/weekly/push?cron=1&offset=0",
+      "schedule": "0 2 * * 1"
+    },
+    {
+      "path": "/api/wealth/anomaly/push?cron=1",
+      "schedule": "0 16 * * *"
     }
   ]
 }

@@ -116,3 +116,36 @@ export async function summarizeIncome(monthOffset = 0): Promise<IncomeSummary> {
   };
 }
 // force rebuild 1778005032
+
+// 任意窗口收入 · 周报 / 异常检测 复用
+export async function summarizeIncomeWindow(startDate: Date, endDate: Date) {
+  const { accounts } = await pullSimpleFin(60);
+  const startTs = startDate.getTime() / 1000;
+  const endTs = endDate.getTime() / 1000;
+  let hg = 0, czv = 0, other = 0, transfer = 0;
+  const byTx: Array<{ amount: number; date: string; desc: string; source: string }> = [];
+
+  for (const a of accounts) {
+    for (const tx of a.transactions || []) {
+      if (tx.posted < startTs || tx.posted >= endTs) continue;
+      const amt = parseFloat(tx.amount || "0");
+      if (amt <= 0) continue;
+      const desc = tx.description || tx.payee || "(no desc)";
+      const src = classifyIncome(desc);
+      const date = new Date(tx.posted * 1000).toISOString().slice(0, 10);
+      byTx.push({ amount: +amt.toFixed(2), date, desc: desc.slice(0, 50), source: src });
+      if (src === "hg") hg += amt;
+      else if (src === "czv") czv += amt;
+      else if (src === "transfer") transfer += amt;
+      else other += amt;
+    }
+  }
+  return {
+    hg_total: +hg.toFixed(2),
+    czv_total: +czv.toFixed(2),
+    other_total: +other.toFixed(2),
+    transfer_total: +transfer.toFixed(2),
+    real_total: +(hg + czv + other).toFixed(2),
+    by_tx: byTx.sort((a, b) => b.amount - a.amount),
+  };
+}

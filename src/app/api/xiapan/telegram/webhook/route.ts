@@ -162,27 +162,29 @@ export async function POST(req: Request) {
   // V0.72 W3 Day 11 · Telegram 降级到 SMS · 游戏在 macOS app
   if (text.startsWith("/start") || text === "/help" || text === "/帮") {
     await sendTelegramMessage(
-      "TZ 个人助理 · 1 个 bot 管所有钱事\n" +
+      "TZ 个人助理 · 1 bot 管所有钱事\n" +
       "─────────────────────────────────\n\n" +
-      "💰 财富 ·\n" +
-      "  /净值  /balance      1 屏看完所有钱\n" +
-      "  /目标  /goals         4 目标 (绿卡/EP/房/车)\n" +
-      "  /账户  /accounts      列所有账户\n" +
-      "  /入    /add slug 金额  入余额\n" +
-      "  /导出  /export        CSV 1 键导走\n\n" +
-      "📊 投资分析 (paper · 不真下) ·\n" +
-      "  /分析  /analyze ticker  AI 看任意 Kalshi 标的\n" +
-      "  /统计  /stats           paper 战绩 WR + ROI\n" +
-      "  /品类  /categories      用户偏好\n\n" +
-      "🎙 录音 / 日记 (W7+) ·\n" +
-      "  Plaud 录音处理完成 · 自动 push\n" +
-      "  /情绪 1-10 (W7 加)\n\n" +
+      "💰 看 ·\n" +
+      "  /净值       1 屏所有钱\n" +
+      "  /目标       4 目标 (绿卡/EP/房/车) + 速度\n" +
+      "  /账单       本月支出 + 类目 + 日均\n" +
+      "  /工资       HG + 奖金 + CZV\n" +
+      "  /账户       所有账户列表\n\n" +
+      "🔮 引导未来 ·\n" +
+      "  /钱要        14 天内 bill vs 现金 缺口\n" +
+      "  /复盘        本周 Wrapped (周日 9pm 自动 push)\n" +
+      "  /目标 -<n>   重设 deadline (n 月后)\n\n" +
+      "✏️ 改 ·\n" +
+      "  /入 slug 金额        入余额 (大多自动同步)\n" +
+      "  /目标更新 slug 金额  目标累积值\n" +
+      "  /等等  /确认  /取消  lockdown 24h 冷静\n" +
+      "  /导出       CSV\n\n" +
       "🚨 自动 push (仅重要) ·\n" +
-      "  早 9am 净值变化\n" +
-      "  大单 ≥ $20 · 24h 冷静期 (W2)\n" +
-      "  月底 1 号 Wrapped 报告\n" +
-      "  红线触发\n\n" +
-      "📌 工作 / 内容 / HG 客户 → 走 Lark CZV-OS · 不在这",
+      "  大单 ≥ $20 · 24h 冷静期\n" +
+      "  支出异常 (类目 +50% vs 4 周均)\n" +
+      "  HG 收入降 ≥ 20% · 红线\n" +
+      "  周日 9pm Wrapped\n\n" +
+      "📌 工作 / 内容 / HG 客户 → 走 Lark CZV-OS",
       { chatId, parseMode: undefined }
     );
     return NextResponse.json({ ok: true });
@@ -227,65 +229,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  // /DCA · 看周定投计划 + 执行历史 (#7)
-  if (text.startsWith("/DCA") || text.startsWith("/dca") || text === "/定投") {
-    try {
-      const r = await fetch(`${BASE}/api/wealth/dca`).then(r => r.json());
-      if (!r.ok) {
-        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
-        return NextResponse.json({ ok: true });
-      }
-      const lines = [`📅 DCA 计划 (${r.plans.length} 个)`, ``];
-      for (const p of r.plans) {
-        lines.push(`${p.ticker ? "₿" : "💰"} ${p.name}`);
-        lines.push(`   $${p.amount_usd} · ${p.frequency}${p.ticker ? ` · ${p.ticker}` : ""}`);
-        lines.push(`   slug · ${p.slug}`);
-        lines.push(``);
-      }
-      if (r.recent?.length) {
-        lines.push(`──── 最近执行 ────`);
-        for (const e of r.recent.slice(0, 5)) {
-          lines.push(`${e.scheduled_at?.slice(0, 10)} · $${e.amount_usd} · ${e.status}`);
-        }
-      }
-      lines.push(``, `跑完转账 · /dca_done <slug>`);
-      await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
-    } catch (e) {
-      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
-    }
-    return NextResponse.json({ ok: true });
-  }
-
-  // /dca_done <slug> · 标记本次 DCA 已转账 · 记入 executions
-  if (text.startsWith("/dca_done") || text.startsWith("/定投完成")) {
-    const slug = text.replace(/^\/(dca_done|定投完成)\s*/, "").trim();
-    if (!slug) {
-      await sendTelegramMessage("用法 · /dca_done <slug>\n例 · /dca_done btc-weekly", { chatId, parseMode: undefined });
-      return NextResponse.json({ ok: true });
-    }
-    try {
-      const planR = await fetch(`${BASE}/api/wealth/dca`).then(r => r.json());
-      const plan = planR.plans?.find((p: any) => p.slug === slug);
-      if (!plan) {
-        await sendTelegramMessage(`✗ 找不到 plan · ${slug}`, { chatId, parseMode: undefined });
-        return NextResponse.json({ ok: true });
-      }
-      const r = await fetch(`${BASE}/api/wealth/dca`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          plan_id: plan.id,
-          amount_usd: plan.amount_usd,
-          status: "executed",
-        }),
-      }).then(r => r.json());
-      await sendTelegramMessage(`✓ ${plan.name} · $${plan.amount_usd} · 执行记录`, { chatId, parseMode: undefined });
-    } catch (e) {
-      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
-    }
-    return NextResponse.json({ ok: true });
-  }
-
   // /目标更新 <slug> <金额> · 设目标当前累积值 (绿卡 / EP 等)
   if (text.startsWith("/目标更新") || text.startsWith("/goal_set") || text.startsWith("/goal ")) {
     const arg = text.replace(/^\/(目标更新|goal_set|goal)\s*/, "").trim();
@@ -319,71 +262,48 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  // /复盘 /wrapped /月报 · 月度 Spotify 风复盘
-  if (text.startsWith("/复盘") || text.startsWith("/wrapped") || text.startsWith("/月报")) {
-    const arg = text.replace(/^\/(复盘|wrapped|月报)\s*/, "").trim();
-    let offset = -1;     // 默认上月
+  // /复盘 · 周报 (A · 改 weekly · 不再月报) · 默认本周 · 数字 = 周 offset
+  if (text.startsWith("/复盘") || text.startsWith("/wrapped") || text.startsWith("/周报")) {
+    const arg = text.replace(/^\/(复盘|wrapped|周报|月报)\s*/, "").trim();
+    let offset = 0;
     if (arg) {
       const n = parseInt(arg);
       if (!isNaN(n)) offset = n;
     }
     try {
-      const r = await fetch(`${BASE}/api/wealth/wrapped?offset=${offset}`).then(r => r.json());
+      const r = await fetch(`${BASE}/api/wealth/weekly?offset=${offset}`).then(r => r.json());
       if (!r.ok) {
         await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
         return NextResponse.json({ ok: true });
       }
       const lines = [
-        `📊 ${r.month} · 月度 Wrapped`,
+        `📊 周报 · ${r.week_label}`,
         `━━━━━━━━━━━━━━━━━━`,
         ``,
         r.narrative,
         ``,
         `━━━━━━━━━━━━━━━━━━`,
-        `数据`,
-        ``,
         `💼 收入 $${r.income.real_total.toFixed(0)}`,
-        `   HG $${r.income.hg_total.toFixed(0)} (${r.income.hg_status})`,
-        `   CZV $${r.income.czv_total.toFixed(0)}`,
+        `   HG $${r.income.hg.toFixed(0)} · CZV $${r.income.czv.toFixed(0)}`,
         ``,
         `💸 支出 $${r.spending.total_out.toFixed(0)} · 日均 $${r.spending.daily_avg.toFixed(0)}`,
+        `   vs 上周 · ${r.spending.delta_vs_prior_week_pct >= 0 ? "+" : ""}${r.spending.delta_vs_prior_week_pct}%`,
       ];
       for (const c of r.spending.top_3_categories || []) {
         lines.push(`   ${c.emoji} ${c.cat} $${c.total.toFixed(0)}`);
       }
-      lines.push(``, `🛑 lockdown · ${r.lockdown.cancelled_count} cancel · 省 $${r.lockdown.saved_usd}`);
-      lines.push(``, `💰 净值 · $${r.networth.current.toFixed(0)}`);
-      lines.push(``, `🎯 目标`);
-      for (const g of r.goals) {
-        lines.push(`   ${g.emoji} ${g.name} ${g.pct}% · 剩 ${g.months_to_deadline}月`);
+      lines.push(``, `🔮 14 天 cashflow`);
+      lines.push(`   bill 预测 · $${r.cashflow.bills_next_14d}`);
+      lines.push(`   现金 · $${r.cashflow.cash_now}`);
+      lines.push(`   ${r.cashflow.gap >= 0 ? "✓ 安全 · 余 $" + r.cashflow.gap : "⚠ 缺 $" + Math.abs(r.cashflow.gap)}`);
+      lines.push(``, `🎯 目标速度`);
+      for (const g of r.goals_velocity || []) {
+        const status = g.on_track ? "✓ 在轨" : `⚠ +$${g.extra_needed_per_month}/月`;
+        lines.push(`   ${g.emoji} ${g.name} ${g.pct}% · ${status}`);
       }
       await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
     } catch (e) {
       await sendTelegramMessage(`✗ /复盘 失败 · ${(e as Error).message}`, { chatId, parseMode: undefined });
-    }
-    return NextResponse.json({ ok: true });
-  }
-
-  // /分享 /share · 朋友圈安全版 wrapped (#15) · 不暴露具体数字
-  if (text.startsWith("/分享") || text.startsWith("/share")) {
-    const arg = text.replace(/^\/(分享|share)\s*/, "").trim();
-    let offset = -1;
-    if (arg) {
-      const n = parseInt(arg);
-      if (!isNaN(n)) offset = n;
-    }
-    try {
-      const r = await fetch(`${BASE}/api/wealth/share?offset=${offset}&mode=share`).then(r => r.json());
-      if (!r.ok) {
-        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
-        return NextResponse.json({ ok: true });
-      }
-      await sendTelegramMessage(
-        `📋 朋友圈安全版 · 复制下面 ↓\n━━━━━━━━━━━━━━━━━━\n\n${r.share_text}\n\n━━━━━━━━━━━━━━━━━━\n隐私 · 不含具体金额`,
-        { chatId, parseMode: undefined }
-      );
-    } catch (e) {
-      await sendTelegramMessage(`✗ /分享 失败 · ${(e as Error).message}`, { chatId, parseMode: undefined });
     }
     return NextResponse.json({ ok: true });
   }
@@ -475,6 +395,70 @@ export async function POST(req: Request) {
       await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
     } catch (e) {
       await sendTelegramMessage(`✗ /账单 失败 · ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // /异常 /anomaly · D · 类目异常 (本周 +50% vs 4 周均)
+  if (text.startsWith("/异常") || text.startsWith("/anomaly") || text.startsWith("/spike")) {
+    try {
+      const r = await fetch(`${BASE}/api/wealth/anomaly`).then(r => r.json());
+      if (!r.ok) {
+        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const lines = [
+        `📊 类目异常 · ${r.window_start} ~ ${r.window_end}`,
+        `本周 $${r.this_week_total.toFixed(0)} vs 4 周均 $${r.prior_4w_weekly_avg.toFixed(0)}`,
+        ``,
+      ];
+      if (r.anomalies.length === 0) {
+        lines.push(`✓ 没异常 · 类目消费稳定`);
+      } else {
+        for (const a of r.anomalies) {
+          const pct = a.delta_pct === 999 ? "新出现" : `+${a.delta_pct}%`;
+          lines.push(`${a.emoji} ${a.cat} · $${a.this_week_total.toFixed(0)} (${pct} · 多 $${a.delta_usd.toFixed(0)})`);
+        }
+      }
+      await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ /异常 失败 · ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // /钱要 /cashflow · B · 14 天 bill vs cash 现金流预测
+  if (text.startsWith("/钱要") || text.startsWith("/cashflow") || text.startsWith("/现金流")) {
+    try {
+      const r = await fetch(`${BASE}/api/wealth/cashflow?horizon=14`).then(r => r.json());
+      if (!r.ok) {
+        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const lines = [
+        `🔮 14 天现金流`,
+        `━━━━━━━━━━━━━━━━━━`,
+        ``,
+        `bill 预测 · $${r.bills_total.toFixed(0)}`,
+        `现金 (checking + savings) · $${r.cash_now.toFixed(0)}`,
+        ``,
+        r.gap >= 0
+          ? `✓ 安全 · 余 $${r.gap.toFixed(0)}`
+          : `⚠ 缺口 · -$${Math.abs(r.gap).toFixed(0)}`,
+        ``,
+      ];
+      if (r.bills.length === 0) {
+        lines.push(`(60 天内没检测到 recurring · 数据不够 · 等几周再来)`);
+      } else {
+        lines.push(`────── 待付清单 ──────`);
+        for (const b of r.bills) {
+          lines.push(`${b.date} · ${b.emoji} $${b.amount.toFixed(0)} · ${b.desc}`);
+        }
+      }
+      lines.push(``, `检测出 ${r.total_recurring_detected} 个周期账单`);
+      await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ /钱要 失败 · ${(e as Error).message}`, { chatId, parseMode: undefined });
     }
     return NextResponse.json({ ok: true });
   }
@@ -695,7 +679,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  // /目标 · 阶段 1 #2 离目标多远
+  // /目标 · 阶段 1 #2 离目标多远 + C 速度警报
   if (text.startsWith("/目标") || text.startsWith("/goals")) {
     try {
       const r = await fetch(`${BASE}/api/wealth/goals`).then(r => r.json());
@@ -703,14 +687,29 @@ export async function POST(req: Request) {
         await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
         return NextResponse.json({ ok: true });
       }
-      const lines = [`🎯 你的目标 · 离梦想多远`, ``];
+      const rate = r.recent_monthly_save_rate;
+      const lines = [
+        `🎯 目标 · 离梦想多远`,
+        `近 30 天月化净攒 · ${rate >= 0 ? "+" : ""}$${rate.toFixed(0)}`,
+        ``,
+      ];
       for (const g of r.goals) {
         const bar = "▰".repeat(Math.floor(g.pct / 10)) + "▱".repeat(10 - Math.floor(g.pct / 10));
         lines.push(`${g.emoji} ${g.name}`);
         lines.push(`  ${bar} ${g.pct.toFixed(0)}%`);
-        lines.push(`  $${Number(g.current_usd).toFixed(0)} / $${Number(g.target_usd).toFixed(0)}  ·  还差 $${g.remaining_usd.toFixed(0)}`);
+        lines.push(`  $${Number(g.current_usd).toFixed(0)} / $${Number(g.target_usd).toFixed(0)}  ·  差 $${g.remaining_usd.toFixed(0)}`);
         if (g.months_to_deadline != null) {
-          lines.push(`  剩 ${g.months_to_deadline} 月  ·  月需 $${g.monthly_need_usd?.toFixed(0)}`);
+          lines.push(`  剩 ${g.months_to_deadline} 月 · 月需 $${g.monthly_need_usd?.toFixed(0)}`);
+          if (g.on_track) {
+            lines.push(`  ✓ 在轨${g.projected_months_at_current_rate ? ` · 按当前速度 ${g.projected_months_at_current_rate} 月达成` : ""}`);
+          } else {
+            if (g.projected_months_at_current_rate) {
+              lines.push(`  ⚠ 慢了 · 当前速度 ${g.projected_months_at_current_rate} 月 (晚 ${g.projected_months_at_current_rate - g.months_to_deadline} 月)`);
+            } else {
+              lines.push(`  ⚠ 当前没攒钱 · 永远到不了`);
+            }
+            lines.push(`  需 +$${g.extra_needed_per_month}/月`);
+          }
         }
         lines.push(``);
       }
@@ -903,72 +902,6 @@ export async function POST(req: Request) {
       await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
     } catch (e) {
       await sendTelegramMessage(`✗ /推荐 失败 · ${(e as Error).message}`, { chatId, parseMode: undefined });
-    }
-    return NextResponse.json({ ok: true });
-  }
-
-  // /分析 · 通用 · 自动识别 股票/加密/Kalshi (#6)
-  if (text.startsWith("/分析") || text.startsWith("/analyze")) {
-    const arg = text.replace(/^\/(分析|analyze)\s*/, "").trim();
-    if (!arg) {
-      await sendTelegramMessage(
-        "用法 · /分析 <ticker>\n例 ·\n  /分析 BTC          加密 spot\n  /分析 AAPL         股票现价\n  /分析 TSLA\n  /分析 KX...        Kalshi 预测",
-        { chatId, parseMode: undefined }
-      );
-      return NextResponse.json({ ok: true });
-    }
-    try {
-      const r = await fetch(`${BASE}/api/wealth/analyze?ticker=${encodeURIComponent(arg)}`, {
-        signal: AbortSignal.timeout(45_000),
-      }).then(r => r.json());
-      if (!r.ok) {
-        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
-        return NextResponse.json({ ok: true });
-      }
-      let lines: string[] = [];
-      if (r.kind === "crypto") {
-        const arrow = r.day_change_pct >= 0 ? "📈" : "📉";
-        lines = [
-          `${arrow} ${r.ticker}`,
-          ``,
-          `现价 · $${r.price_usd}`,
-          `日 · ${r.day_change_pct >= 0 ? "+" : ""}${r.day_change_pct}%`,
-          `24h · 高 $${r.day_high} · 低 $${r.day_low}`,
-          ``,
-          r.reasoning,
-        ];
-      } else if (r.kind === "stock") {
-        const arrow = r.day_change_pct >= 0 ? "📈" : "📉";
-        lines = [
-          `${arrow} ${r.ticker}${r.name ? ` (${r.name.slice(0, 30)})` : ""}`,
-          ``,
-          `现价 · $${r.price_usd}`,
-          `日 · ${r.day_change_pct >= 0 ? "+" : ""}${r.day_change_pct}% (vs 前收 $${r.prev_close})`,
-          `日内 · 高 $${r.day_high} · 低 $${r.day_low}`,
-          `成交 · ${r.day_volume?.toLocaleString() || "?"}`,
-          `市场 · ${r.market_state}`,
-        ];
-      } else {
-        // Kalshi
-        lines = [
-          `🎯 ${r.ticker}`,
-          r.title ? r.title.slice(0, 80) : "",
-          ``,
-          `状态 · ${r.market_status}${r.result ? ` · result=${r.result}` : ""}`,
-          `当前 · ${(r.last_price * 100).toFixed(0)}¢`,
-          `成交 24h · ${r.volume_24h}`,
-        ];
-        if (r.warnings?.length) lines.push(``, `⚠️ ${r.warnings.join(" · ")}`);
-        if (r.fair_prob != null) {
-          lines.push(``, `🎯 LLM 估 · ${(r.fair_prob * 100).toFixed(0)}%`);
-          if (r.ev_pct != null) lines.push(`   EV · ${r.ev_pct >= 0 ? "+" : ""}${r.ev_pct}%`);
-        }
-        lines.push(``, `→ ${r.recommendation}`);
-        if (r.reasoning) lines.push(``, r.reasoning);
-      }
-      await sendTelegramMessage(lines.filter(Boolean).join("\n"), { chatId, parseMode: undefined });
-    } catch (e) {
-      await sendTelegramMessage(`✗ /分析 失败 · ${(e as Error).message}`, { chatId, parseMode: undefined });
     }
     return NextResponse.json({ ok: true });
   }

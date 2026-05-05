@@ -95,6 +95,129 @@ export interface MonthSummary {
   projected_month_burn: number;
 }
 
+// 任意窗口 · [start, end) · 周报 / 现金流 / 异常 复用
+export async function summarizeWindow(startDate: Date, endDate: Date, daysBackPull = 60): Promise<MonthSummary> {
+  const { accounts } = await pullSimpleFin(daysBackPull);
+  const startTs = startDate.getTime() / 1000;
+  const endTs = endDate.getTime() / 1000;
+  const days = Math.max(1, Math.round((endTs - startTs) / 86400));
+
+  let total_in = 0;
+  let total_out = 0;
+  const byCat: Record<string, { emoji: string; count: number; total: number }> = {};
+  const allTx: Array<{ desc: string; amount: number; date: string; cat: string; emoji: string }> = [];
+
+  for (const a of accounts) {
+    for (const tx of a.transactions || []) {
+      if (tx.posted < startTs || tx.posted >= endTs) continue;
+      if (tx.pending) continue;
+      const amt = parseFloat(tx.amount || "0");
+      const desc = tx.description || tx.payee || "(no desc)";
+      const { cat, emoji } = categorize(desc);
+      const date = new Date(tx.posted * 1000).toISOString().slice(0, 10);
+      allTx.push({ desc: desc.slice(0, 50), amount: amt, date, cat, emoji });
+      if (amt > 0) total_in += amt;
+      else total_out += Math.abs(amt);
+      if (!byCat[cat]) byCat[cat] = { emoji, count: 0, total: 0 };
+      byCat[cat].count++;
+      byCat[cat].total += Math.abs(amt);
+    }
+  }
+
+  const byCategory = Object.entries(byCat)
+    .map(([cat, d]) => ({ cat, emoji: d.emoji, count: d.count, total_usd: +d.total.toFixed(2) }))
+    .sort((a, b) => b.total_usd - a.total_usd);
+
+  const top_5_expenses = allTx
+    .filter((t) => t.amount < 0)
+    .sort((a, b) => a.amount - b.amount)
+    .slice(0, 5)
+    .map((t) => ({ ...t, amount: Math.abs(t.amount) }));
+
+  const daily_avg_burn = total_out / days;
+
+  return {
+    month_start: startDate.toISOString().slice(0, 10),
+    total_in: +total_in.toFixed(2),
+    total_out: +total_out.toFixed(2),
+    net: +(total_in - total_out).toFixed(2),
+    by_category: byCategory,
+    top_5_expenses,
+    txs_count: allTx.length,
+    daily_avg_burn: +daily_avg_burn.toFixed(2),
+    days_in_month: days,
+    days_passed: days,
+    projected_month_burn: +(daily_avg_burn * 30).toFixed(2),
+  };
+}
+
+// 检测重复账单 (recurring) · 14 天预测复用
+// 算法 · 60 天回溯 · 同 description root + 金额 ±10% · 出现 ≥ 2 次 · 视为周期账单
+export interface RecurringBill {
+  desc: string;
+  cat: string;
+  emoji: string;
+  avg_amount: number;
+  period_days: number;
+  last_date: string;
+  next_predicted: string;
+  occurrences: number;
+}
+
+export async function detectRecurring(daysBackPull = 60): Promise<RecurringBill[]> {
+  const { accounts } = await pullSimpleFin(daysBackPull);
+  const groups: Record<string, Array<{ amount: number; ts: number; desc: string }>> = {};
+
+  for (const a of accounts) {
+    for (const tx of a.transactions || []) {
+      if (tx.pending) continue;
+      const amt = parseFloat(tx.amount || "0");
+      if (amt >= 0) continue;     // 只看支出
+      const desc = (tx.description || tx.payee || "").trim();
+      if (!desc) continue;
+      // root key · 取前 4 词 · lowercase · 去日期数字
+      const root = desc.toLowerCase()
+        .replace(/\d{2,}/g, "")
+        .replace(/[^a-z\s]/g, " ")
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 4)
+        .join(" ");
+      if (!root) continue;
+      if (!groups[root]) groups[root] = [];
+      groups[root].push({ amount: Math.abs(amt), ts: tx.posted, desc });
+    }
+  }
+
+  const out: RecurringBill[] = [];
+  for (const [root, txs] of Object.entries(groups)) {
+    if (txs.length < 2) continue;
+    txs.sort((a, b) => a.ts - b.ts);
+    const avg = txs.reduce((s, t) => s + t.amount, 0) / txs.length;
+    // 金额一致性检查
+    const consistent = txs.every((t) => Math.abs(t.amount - avg) / avg < 0.15);
+    if (!consistent) continue;
+    // 周期
+    const gaps = [];
+    for (let i = 1; i < txs.length; i++) gaps.push((txs[i].ts - txs[i - 1].ts) / 86400);
+    const period = gaps.reduce((s, g) => s + g, 0) / gaps.length;
+    if (period < 5 || period > 45) continue;     // 5-45 天 · 周/双周/月
+    const last = txs[txs.length - 1];
+    const nextTs = last.ts + period * 86400;
+    const { cat, emoji } = categorize(last.desc);
+    out.push({
+      desc: last.desc.slice(0, 40),
+      cat, emoji,
+      avg_amount: +avg.toFixed(2),
+      period_days: +period.toFixed(0),
+      last_date: new Date(last.ts * 1000).toISOString().slice(0, 10),
+      next_predicted: new Date(nextTs * 1000).toISOString().slice(0, 10),
+      occurrences: txs.length,
+    });
+  }
+  return out.sort((a, b) => a.next_predicted.localeCompare(b.next_predicted));
+}
+
 export async function summarizeMonth(daysBack = 30): Promise<MonthSummary> {
   const { accounts } = await pullSimpleFin(daysBack);
   const now = new Date();
