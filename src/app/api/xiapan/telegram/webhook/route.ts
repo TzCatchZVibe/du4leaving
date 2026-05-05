@@ -227,6 +227,56 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
+  // /工资 /HG /income · 本月工资 + 奖金 + CZV 营收
+  if (text.startsWith("/工资") || text.startsWith("/HG") || text.startsWith("/hg") || text.startsWith("/income") || text.startsWith("/月薪")) {
+    try {
+      const r = await fetch(`${BASE}/api/wealth/income`).then(r => r.json());
+      if (!r.ok) {
+        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const tm = r.this_month;
+      const lm = r.last_month;
+      const sign = (v: number) => v >= 0 ? `+$${v.toFixed(2)}` : `-$${Math.abs(v).toFixed(2)}`;
+      const statusEmoji = {
+        below_base: "🚨",
+        base_only: "⚠️",
+        with_bonus: "✓",
+        above_normal: "⭐",
+      }[tm.hg_status as string] || "·";
+      const lines = [
+        `💼 收入 · 本月 ${tm.month_start.slice(0, 7)}`,
+        ``,
+        `── HG (主收入 · base $${tm.hg_target}) ──`,
+        `${statusEmoji} HG · $${tm.hg_total.toFixed(2)} · ${tm.hg_count} 笔 · ${tm.hg_vs_base_pct}% of base`,
+        `奖金区间 · $${tm.hg_bonus_low}-${tm.hg_bonus_high}`,
+        ``,
+        `── CZV 工作室独立营收 ──`,
+        `🏪 CZV · $${tm.czv_total.toFixed(2)} · ${tm.czv_count} 笔`,
+        ``,
+        `── 其他 / 利息 ──`,
+        `📥 其他 · $${tm.other_total.toFixed(2)}`,
+        `↔ 转账 (内部 · 不算) · $${tm.transfer_total.toFixed(2)}`,
+        ``,
+        `═══════════════`,
+        `本月真收入 · $${tm.total_real_income.toFixed(2)}`,
+        `vs 上月 · ${sign(tm.total_real_income - lm.total_real_income)}`,
+        ``,
+        `── 本月所有进账 ──`,
+      ];
+      for (const t of tm.by_tx.slice(0, 8)) {
+        const e = t.source === "hg" ? "💼" : t.source === "czv" ? "🏪" : t.source === "transfer" ? "↔" : t.source === "interest" ? "📈" : "•";
+        lines.push(`${e} ${t.date} · $${t.amount.toFixed(2)} · ${t.desc.slice(0, 35)}`);
+      }
+      lines.push(``);
+      lines.push(`📌 状态 · ${tm.hg_status === "below_base" ? "🚨 HG 工资低于 base · 联系老板" : tm.hg_status === "base_only" ? "⚠️ 没奖金 · 看上月趋势" : tm.hg_status === "with_bonus" ? "✓ 正常 base + 奖金" : "⭐ 高于平均 · 加薪了?"}`);
+      await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ /工资 失败 · ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
   // /账单 /burn · 本月烧钱速度 + 分类
   if (text.startsWith("/账单") || text.startsWith("/burn") || text.startsWith("/花了")) {
     try {
