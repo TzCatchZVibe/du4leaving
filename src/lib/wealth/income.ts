@@ -99,3 +99,4 @@ export async function summarizeIncome(monthOffset = 0): Promise<IncomeSummary> {
     hg_bonus_high: HG_BONUS_RANGE[1],
   };
 }
+// force rebuild 1778005032
