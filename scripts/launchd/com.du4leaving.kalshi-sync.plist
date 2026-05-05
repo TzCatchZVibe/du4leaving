@@ -8,8 +8,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>/usr/local/bin/node</string>
-        <string>/Users/happyglobal_tk_team/du4leaving/scripts/xiapan-pull-positions.mjs</string>
-        <string>--sync</string>
+        <string>/Users/happyglobal_tk_team/du4leaving/scripts/xiapan-sync-balances.mjs</string>
     </array>
 
     <key>WorkingDirectory</key>

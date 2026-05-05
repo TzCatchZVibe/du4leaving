@@ -227,6 +227,34 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
+  // /同步 /sync · 手动触发 · 但本地 launchd 已经 5min 自动 (Vercel 端无 RSA · 信息提醒)
+  if (text.startsWith("/同步") || text === "/sync") {
+    const lines = [
+      "🔄 自动同步状态 ·",
+      "",
+      "本地 launchd · 5min 自动跑 ·",
+      "  ✓ Kalshi (你已有 RSA · 自动)",
+      "  ○ Coinbase (要 API key · 见下)",
+      "  ○ SimpleFIN 银行 (要 access token · 见下)",
+      "",
+      "📌 接 Coinbase ·",
+      "  1 · coinbase.com · Settings · API Keys · Create",
+      "  2 · 权限只勾 · wallet:accounts:read",
+      "  3 · 复制 API Key + Secret",
+      "  4 · 给我 · 我加 .env.local 立刻自动",
+      "",
+      "📌 接 SimpleFIN (银行) ·",
+      "  1 · 注册 simplefin.org/auth/setup ($15/年)",
+      "  2 · 链你的银行 (Chase / BoA / etc · OAuth read-only)",
+      "  3 · 拿 access token (base64 string)",
+      "  4 · 给我 · 我加 .env.local",
+      "",
+      "📌 现金 + HG 应收 · 没法自动 · /入 cash 200 偶尔",
+    ];
+    await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
+    return NextResponse.json({ ok: true });
+  }
+
   // V0.74 W1 · 财富模块命令 · 净值 / 目标 / 入账 / 导出
   if (text.startsWith("/净值") || text.startsWith("/networth") || text.startsWith("/balance")) {
     try {
