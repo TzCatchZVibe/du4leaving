@@ -107,22 +107,23 @@ export async function generateWrapped(monthOffset = -1): Promise<WrappedReport> 
     monthSavings(monthOffset).catch(() => ({ cancelled_count: 0, saved_usd: 0, approved_count: 0, save_rate_pct: 0 } as any)),
   ]);
 
-  // 目标 · 直接 hardcode 简化 (先不调 endpoint)
-  const goals_raw = [
-    { slug: "ep-record", name: "EP 录音", emoji: "🎤", target: 3000, deadline: "2026-12-31" },
-    { slug: "greencard", name: "绿卡基金", emoji: "🇺🇸", target: 30000, deadline: "2029-12-31" },
-    { slug: "house-down", name: "房首付", emoji: "🏠", target: 80000, deadline: "2031-06-01" },
-    { slug: "cybertruck", name: "Cybertruck", emoji: "🛻", target: 60000, deadline: "2031-12-31" },
-  ];
-  const goals = goals_raw.map((g) => {
-    const months = Math.max(1, Math.floor((new Date(g.deadline).getTime() - Date.now()) / (30 * 86400000)));
-    const pct = (Number(networth?.total_usd || 0) / g.target) * 100;
+  // 目标 · 用真 wealth_goals.current_usd · 不是 net worth (TZ 反馈 · A 修)
+  const { listGoals } = await import("./store");
+  const realGoals = await listGoals().catch(() => []);
+  const goals = realGoals.map((g) => {
+    const months = g.deadline_date
+      ? Math.max(1, Math.floor((new Date(g.deadline_date).getTime() - Date.now()) / (30 * 86400000)))
+      : null;
+    const target = Number(g.target_usd);
+    const current = Number(g.current_usd);
+    const pct = target > 0 ? (current / target) * 100 : 0;
+    const remaining = Math.max(0, target - current);
     return {
       name: g.name,
-      emoji: g.emoji,
+      emoji: g.emoji || "🎯",
       pct: +pct.toFixed(0),
       months_to_deadline: months,
-      monthly_need: +(g.target / months).toFixed(0),
+      monthly_need: months ? +(remaining / months).toFixed(0) : null,
     };
   });
 
