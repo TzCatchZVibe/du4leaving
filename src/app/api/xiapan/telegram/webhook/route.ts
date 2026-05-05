@@ -227,6 +227,51 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
+  // /复盘 /wrapped /月报 · 月度 Spotify 风复盘
+  if (text.startsWith("/复盘") || text.startsWith("/wrapped") || text.startsWith("/月报")) {
+    const arg = text.replace(/^\/(复盘|wrapped|月报)\s*/, "").trim();
+    let offset = -1;     // 默认上月
+    if (arg) {
+      const n = parseInt(arg);
+      if (!isNaN(n)) offset = n;
+    }
+    try {
+      const r = await fetch(`${BASE}/api/wealth/wrapped?offset=${offset}`).then(r => r.json());
+      if (!r.ok) {
+        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const lines = [
+        `📊 ${r.month} · 月度 Wrapped`,
+        `━━━━━━━━━━━━━━━━━━`,
+        ``,
+        r.narrative,
+        ``,
+        `━━━━━━━━━━━━━━━━━━`,
+        `数据`,
+        ``,
+        `💼 收入 $${r.income.real_total.toFixed(0)}`,
+        `   HG $${r.income.hg_total.toFixed(0)} (${r.income.hg_status})`,
+        `   CZV $${r.income.czv_total.toFixed(0)}`,
+        ``,
+        `💸 支出 $${r.spending.total_out.toFixed(0)} · 日均 $${r.spending.daily_avg.toFixed(0)}`,
+      ];
+      for (const c of r.spending.top_3_categories || []) {
+        lines.push(`   ${c.emoji} ${c.cat} $${c.total.toFixed(0)}`);
+      }
+      lines.push(``, `🛑 lockdown · ${r.lockdown.cancelled_count} cancel · 省 $${r.lockdown.saved_usd}`);
+      lines.push(``, `💰 净值 · $${r.networth.current.toFixed(0)}`);
+      lines.push(``, `🎯 目标`);
+      for (const g of r.goals) {
+        lines.push(`   ${g.emoji} ${g.name} ${g.pct}% · 剩 ${g.months_to_deadline}月`);
+      }
+      await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ /复盘 失败 · ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
   // /工资 /HG /income · 本月工资 + 奖金 + CZV 营收
   if (text.startsWith("/工资") || text.startsWith("/HG") || text.startsWith("/hg") || text.startsWith("/income") || text.startsWith("/月薪")) {
     try {
