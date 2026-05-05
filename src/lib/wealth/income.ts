@@ -14,17 +14,20 @@ interface IncomeTx {
 }
 
 // 哪些交易是 HG 工资?
+// SimpleFIN ACH desc 格式 · "GUSTO PAYROLL ... Haoyu Zheng" (尾部带收款人名)
+// 导致 transfer regex 误匹配 · 现在优先 hg · transfer 是 fallback
 function classifyIncome(desc: string): IncomeTx["source"] {
   const d = desc.toLowerCase();
-  // 转账内 · 你自己 (HAOYU ZHENG = TZ 中文名) · 不算新收入 · 优先级最高
-  if (/haoyu.*zheng|zelle.*from.*haoyu|capital.*one.*ach.*deposit|transfer.*from.*self|own.*account/i.test(d)) return "transfer";
-  if (/zelle.*from.*me|paypal.*xfer/i.test(d)) return "transfer";
-  // HG-related · 真 payroll · GUSTO 是 HG 工资系统
-  if (/gusto.*payroll|happy.*global.*payroll|hg.*payroll|hg.*salary/i.test(d)) return "hg";
-  // CZV / TZ 工作室
+  // 1 · HG payroll (真工资 · 优先级最高)
+  if (/gusto|happy.*global.*payroll|hg.*payroll|hg.*salary/i.test(d)) return "hg";
+  // 2 · CZV / TZ 工作室独立营收
   if (/catchz|catchzvibe|czv.*invoice|wozniak/i.test(d)) return "czv";
-  // 银行利息
+  // 3 · 银行利息
   if (/interest/i.test(d)) return "interest";
+  // 4 · transfer 内部 · zelle from haoyu (不带 GUSTO 上下文 · 才算)
+  if (/^zelle.*from.*haoyu|^haoyu.*zheng|capital.*one.*ach.*deposit|transfer.*from.*self|^own.*account/i.test(d)) return "transfer";
+  if (/zelle.*from.*me|paypal.*xfer/i.test(d)) return "transfer";
+  // 5 · 默认其他
   return "other";
 }
 
