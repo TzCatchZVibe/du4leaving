@@ -16,18 +16,30 @@ interface IncomeTx {
 // 哪些交易是 HG 工资?
 // SimpleFIN ACH desc 格式 · "GUSTO PAYROLL ... Haoyu Zheng" (尾部带收款人名)
 // 导致 transfer regex 误匹配 · 现在优先 hg · transfer 是 fallback
+//
+// TZ 真实情况 (2026-05-05 校准) ·
+// - YIXIN WANG = Frida (转正前 HG 给她的工资 zelle 中转 TZ 代收 · 后续 TZ 转 Frida)
+//   = 不是 TZ 净收入 · 归 "frida-passthrough" (类 transfer · 但来源不同)
+// - ZHIYUAN YU = 公寓 referral 友 · TZ 推 Crest at Park Central · TZ 拿 $250 一半
+//   = 真 misc income · 归 "referral"
+// - Capital One Mobile Pymt = TZ 自己内部 (CC 还款另一边)
+//   = transfer
 function classifyIncome(desc: string): IncomeTx["source"] {
   const d = desc.toLowerCase();
-  // 1 · HG payroll (真工资 · 优先级最高)
+  // 1 · HG payroll (真工资 · 优先级最高 · GUSTO desc 末尾带 Haoyu Zheng 不影响)
   if (/gusto|happy.*global.*payroll|hg.*payroll|hg.*salary/i.test(d)) return "hg";
   // 2 · CZV / TZ 工作室独立营收
   if (/catchz|catchzvibe|czv.*invoice|wozniak/i.test(d)) return "czv";
   // 3 · 银行利息
   if (/interest/i.test(d)) return "interest";
-  // 4 · transfer 内部 · zelle from haoyu (不带 GUSTO 上下文 · 才算)
-  if (/^zelle.*from.*haoyu|^haoyu.*zheng|capital.*one.*ach.*deposit|transfer.*from.*self|^own.*account/i.test(d)) return "transfer";
-  if (/zelle.*from.*me|paypal.*xfer/i.test(d)) return "transfer";
-  // 5 · 默认其他
+  // 4 · transfer / 中转 / 内部 · 全归 transfer (不算 TZ 净收入)
+  //    包括 · 自己 zelle / 信用卡内部 / Frida (Yixin Wang) HG 工资中转
+  if (/^zelle.*from.*haoyu|^haoyu.*zheng|own.*account/i.test(d)) return "transfer";
+  if (/yixin.*wang|zelle.*from.*yixin/i.test(d)) return "transfer";   // Frida 中转
+  if (/capital.*one.*mobile.*pymt|capital.*one.*ach.*deposit|capital.*one.*autopay/i.test(d)) return "transfer";
+  if (/zelle.*from.*me|paypal.*xfer|transfer.*from.*self/i.test(d)) return "transfer";
+  // 5 · 真 misc income · referral / 一次性副收入
+  if (/zhiyuan.*yu|referral|bonus.*from/i.test(d)) return "other";
   return "other";
 }
 
