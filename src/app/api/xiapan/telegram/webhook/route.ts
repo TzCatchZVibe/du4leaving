@@ -227,6 +227,47 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
+  // /账单 /burn · 本月烧钱速度 + 分类
+  if (text.startsWith("/账单") || text.startsWith("/burn") || text.startsWith("/花了")) {
+    try {
+      const r = await fetch(`${BASE}/api/wealth/burn`).then(r => r.json());
+      if (!r.ok) {
+        await sendTelegramMessage(`✗ ${r.error}\n\n如果是 SimpleFIN · 检查 .env 是否设了 token`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const sign = (v: number) => v >= 0 ? `+$${v.toFixed(2)}` : `-$${Math.abs(v).toFixed(2)}`;
+      const lines = [
+        `💸 本月烧钱速度`,
+        ``,
+        `── 总览 ──`,
+        `收 ${sign(r.total_in)}`,
+        `花 -$${r.total_out.toFixed(2)}`,
+        `净 ${sign(r.net)}`,
+        ``,
+        `── burn rate ──`,
+        `日均 $${r.daily_avg_burn.toFixed(2)}/天`,
+        `已过 ${r.days_passed}/${r.days_in_month} 天`,
+        `按这速度 · 月 burn $${r.projected_month_burn.toFixed(2)}`,
+        ``,
+        `── 哪花了 (top 8) ──`,
+      ];
+      for (const c of r.by_category.slice(0, 8)) {
+        lines.push(`${c.emoji} ${c.cat.padEnd(15)} ${c.count} 次 · $${c.total_usd.toFixed(0)}`);
+      }
+      lines.push(``);
+      lines.push(`── 最大 5 单支出 ──`);
+      for (const e of r.top_5_expenses) {
+        lines.push(`${e.emoji} ${e.date} · $${e.amount.toFixed(0)} · ${e.desc.slice(0, 30)}`);
+      }
+      lines.push(``);
+      lines.push(`📊 ${r.txs_count} 笔交易 · 来自 SimpleFIN 真银行`);
+      await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ /账单 失败 · ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
   // /等等 <金额> <描述> · 阶段 1 #4 · 冲动 lockdown · 24h 冷静
   if (text.startsWith("/等等") || text.startsWith("/wait ") || text.startsWith("/等 ")) {
     const arg = text.replace(/^\/(等等|wait|等)\s*/, "").trim();
