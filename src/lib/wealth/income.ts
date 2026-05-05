@@ -16,12 +16,13 @@ interface IncomeTx {
 // 哪些交易是 HG 工资?
 function classifyIncome(desc: string): IncomeTx["source"] {
   const d = desc.toLowerCase();
-  // HG-related · 你 H1B sponsor · 名字常见的几种
-  if (/happy.*global|haoyu.*zheng|hg.*payroll|hg.*salary|payroll/i.test(d)) return "hg";
+  // 转账内 · 你自己 (HAOYU ZHENG = TZ 中文名) · 不算新收入 · 优先级最高
+  if (/haoyu.*zheng|zelle.*from.*haoyu|capital.*one.*ach.*deposit|transfer.*from.*self|own.*account/i.test(d)) return "transfer";
+  if (/zelle.*from.*me|paypal.*xfer/i.test(d)) return "transfer";
+  // HG-related · 真 payroll · GUSTO 是 HG 工资系统
+  if (/gusto.*payroll|happy.*global.*payroll|hg.*payroll|hg.*salary/i.test(d)) return "hg";
   // CZV / TZ 工作室
   if (/catchz|catchzvibe|czv.*invoice|wozniak/i.test(d)) return "czv";
-  // 转账内 (你给自己 zelle / paypal · 不算新收入)
-  if (/zelle.*from.*me|paypal.*xfer|transfer.*from.*self|capital.*one.*ach.*deposit/i.test(d)) return "transfer";
   // 银行利息
   if (/interest/i.test(d)) return "interest";
   return "other";
