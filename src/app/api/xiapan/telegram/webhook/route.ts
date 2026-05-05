@@ -162,19 +162,27 @@ export async function POST(req: Request) {
   // V0.72 W3 Day 11 · Telegram 降级到 SMS · 游戏在 macOS app
   if (text.startsWith("/start") || text === "/help" || text === "/帮") {
     await sendTelegramMessage(
-      "百川 · 紧急短信通道\n" +
-      "─────────────────\n\n" +
-      "Telegram 不是游戏 · 是 SMS\n" +
-      "游戏面板在 Mac app · 打开 Du4Leaving 看\n\n" +
-      "Telegram 唯一一个命令 ·\n" +
-      "  /钱   出门时一眼瞥 (P0/S/C/今日)\n\n" +
-      "我自动 push 你 (仅紧急 · 别的全静默) ·\n" +
-      "  🚨 熔断触发 (账户异常)\n" +
-      "  🚨 第一笔真单成功\n" +
-      "  🚨 月底分钱报告\n" +
-      "  🚨 系统挂掉\n\n" +
-      "其他 25+ 旧命令 · 仍能用 · 但建议忘\n" +
-      "回到 Mac · 打开 Du4Leaving · 那是游戏",
+      "TZ 个人助理 · 1 个 bot 管所有钱事\n" +
+      "─────────────────────────────────\n\n" +
+      "💰 财富 ·\n" +
+      "  /净值  /balance      1 屏看完所有钱\n" +
+      "  /目标  /goals         4 目标 (绿卡/EP/房/车)\n" +
+      "  /账户  /accounts      列所有账户\n" +
+      "  /入    /add slug 金额  入余额\n" +
+      "  /导出  /export        CSV 1 键导走\n\n" +
+      "📊 投资分析 (paper · 不真下) ·\n" +
+      "  /分析  /analyze ticker  AI 看任意 Kalshi 标的\n" +
+      "  /统计  /stats           paper 战绩 WR + ROI\n" +
+      "  /品类  /categories      用户偏好\n\n" +
+      "🎙 录音 / 日记 (W7+) ·\n" +
+      "  Plaud 录音处理完成 · 自动 push\n" +
+      "  /情绪 1-10 (W7 加)\n\n" +
+      "🚨 自动 push (仅重要) ·\n" +
+      "  早 9am 净值变化\n" +
+      "  大单 ≥ $20 · 24h 冷静期 (W2)\n" +
+      "  月底 1 号 Wrapped 报告\n" +
+      "  红线触发\n\n" +
+      "📌 工作 / 内容 / HG 客户 → 走 Lark CZV-OS · 不在这",
       { chatId, parseMode: undefined }
     );
     return NextResponse.json({ ok: true });
@@ -220,7 +228,7 @@ export async function POST(req: Request) {
   }
 
   // V0.74 W1 · 财富模块命令 · 净值 / 目标 / 入账 / 导出
-  if (text.startsWith("/净值") || text.startsWith("/networth")) {
+  if (text.startsWith("/净值") || text.startsWith("/networth") || text.startsWith("/balance")) {
     try {
       const r = await fetch(`${BASE}/api/wealth/networth?snapshot=1`).then(r => r.json());
       if (!r.ok) {
@@ -281,8 +289,8 @@ export async function POST(req: Request) {
   }
 
   // /入 <slug> <amount> · 手动登记余额
-  if (text.startsWith("/入 ") || text.startsWith("/入账") || text.startsWith("/setbalance")) {
-    const arg = text.replace(/^\/(入账?|setbalance)\s*/, "").trim();
+  if (text.startsWith("/入 ") || text.startsWith("/入账") || text.startsWith("/setbalance") || text.startsWith("/add ")) {
+    const arg = text.replace(/^\/(入账?|setbalance|add)\s*/, "").trim();
     const m = arg.match(/^(\S+)\s+(\d+(?:\.\d+)?)\s*(.*)?$/);
     if (!m) {
       await sendTelegramMessage(
