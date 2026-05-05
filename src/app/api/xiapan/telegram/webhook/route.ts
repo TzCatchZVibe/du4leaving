@@ -227,6 +227,159 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
+  // /等等 <金额> <描述> · 阶段 1 #4 · 冲动 lockdown · 24h 冷静
+  if (text.startsWith("/等等") || text.startsWith("/wait ") || text.startsWith("/等 ")) {
+    const arg = text.replace(/^\/(等等|wait|等)\s*/, "").trim();
+    const m = arg.match(/^\$?(\d+(?:\.\d+)?)\s+(.+)$/);
+    if (!m) {
+      await sendTelegramMessage(
+        "用法 · /等等 <金额> <描述>\n例 · /等等 80 PDD 想买的衣服\n例 · /等等 50 ATP 想押的 BUDVIR\n\n大单 ≥ $20 · 24h 后系统问 · 多数时候你不要了 · 省钱",
+        { chatId, parseMode: undefined }
+      );
+      return NextResponse.json({ ok: true });
+    }
+    try {
+      const r = await fetch(`${BASE}/api/wealth/lockdown`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount_usd: parseFloat(m[1]), description: m[2] }),
+      }).then(r => r.json());
+      if (!r.ok) {
+        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const p = r.pending;
+      const hours = p.cooldown_hours;
+      const lines = [
+        `⏸ 已记 · ${hours}h 冷静`,
+        ``,
+        `${p.description}`,
+        `$${Number(p.amount_usd).toFixed(2)} · ${p.category}`,
+        `id · ${p.short_id}`,
+        ``,
+        `${hours}h 后 · 我会 push 你 · 还要再确认`,
+        `想立刻确认 · /确认 ${p.short_id}`,
+        `不想要了 · /取消 ${p.short_id}`,
+        ``,
+        `💡 80% 概率你 24h 后不想要了`,
+      ];
+      await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // /确认 <short_id> · 决定要 (approved · 你去 spend)
+  if (text.startsWith("/确认") || text.startsWith("/approve")) {
+    const sid = text.replace(/^\/(确认|approve)\s*/, "").trim();
+    if (!sid) {
+      await sendTelegramMessage("用法 · /确认 <id>\n看 pending · /待办", { chatId, parseMode: undefined });
+      return NextResponse.json({ ok: true });
+    }
+    try {
+      const r = await fetch(`${BASE}/api/wealth/lockdown`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ short_id: sid, decision: "approved" }),
+      }).then(r => r.json());
+      if (!r.ok) {
+        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      await sendTelegramMessage(
+        `✓ 确认 · 去花吧 · $${Number(r.item.amount_usd).toFixed(2)} · ${r.item.description}\n记 · 这单是你 ${r.item.cooldown_hours}h 后还想要的 · 不冲动`,
+        { chatId, parseMode: undefined }
+      );
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // /取消 <short_id> · 不要了 · 省钱
+  if (text.startsWith("/取消") || text.startsWith("/cancel")) {
+    const sid = text.replace(/^\/(取消|cancel)\s*/, "").trim();
+    if (!sid) {
+      await sendTelegramMessage("用法 · /取消 <id>", { chatId, parseMode: undefined });
+      return NextResponse.json({ ok: true });
+    }
+    try {
+      const r = await fetch(`${BASE}/api/wealth/lockdown`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ short_id: sid, decision: "cancelled" }),
+      }).then(r => r.json());
+      if (!r.ok) {
+        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      // 看本月 cancel 总数
+      const stats = await fetch(`${BASE}/api/wealth/lockdown?action=stats`).then(r => r.json());
+      const tm = stats.this_month || {};
+      await sendTelegramMessage(
+        `🎉 取消 · 省 $${Number(r.item.amount_usd).toFixed(2)}\n本月已 cancel ${tm.cancelled_count || 1} 单 · 共省 $${tm.saved_usd || 0}\n小钱不积 · 大目标不来`,
+        { chatId, parseMode: undefined }
+      );
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // /待办 · 列 pending 单
+  if (text.startsWith("/待办") || text.startsWith("/pending") || text.startsWith("/queue")) {
+    try {
+      const r = await fetch(`${BASE}/api/wealth/lockdown?action=pending`).then(r => r.json());
+      if (!r.ok) {
+        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      if (!r.pending || r.pending.length === 0) {
+        await sendTelegramMessage("📭 没 pending\n想花钱 · /等等 50 描述", { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const lines = ["⏸ 待决定 (24h 冷静中)", ""];
+      for (const p of r.pending) {
+        const hoursLeft = ((new Date(p.expires_at).getTime() - Date.now()) / 3600000).toFixed(1);
+        lines.push(`${p.short_id} · $${Number(p.amount_usd).toFixed(2)} · ${p.description.slice(0,40)}`);
+        lines.push(`   ${p.category} · 还剩 ${hoursLeft}h`);
+        lines.push(`   /确认 ${p.short_id}  /取消 ${p.short_id}`);
+        lines.push("");
+      }
+      await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // /省 · 看本月 lockdown 省了多少
+  if (text.startsWith("/省") || text.startsWith("/saved")) {
+    try {
+      const r = await fetch(`${BASE}/api/wealth/lockdown?action=stats`).then(r => r.json());
+      const tm = r.this_month || {};
+      const lm = r.last_month || {};
+      const lines = [
+        `💰 lockdown 战绩`,
+        ``,
+        `── 本月 ──`,
+        `cancel ${tm.cancelled_count || 0} 单 · 省 $${tm.saved_usd || 0}`,
+        `approve ${tm.approved_count || 0} 单 · 花 $${tm.spent_usd || 0}`,
+        `pending ${tm.pending_count || 0} 单 · 待决`,
+        `cancel 率 · ${tm.save_rate_pct || 0}%`,
+        ``,
+        `── 上月 ──`,
+        `cancel ${lm.cancelled_count || 0} 单 · 省 $${lm.saved_usd || 0}`,
+        `approve ${lm.approved_count || 0} 单 · 花 $${lm.spent_usd || 0}`,
+      ];
+      await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
   // /同步 /sync · 手动触发 · 但本地 launchd 已经 5min 自动 (Vercel 端无 RSA · 信息提醒)
   if (text.startsWith("/同步") || text === "/sync") {
     const lines = [

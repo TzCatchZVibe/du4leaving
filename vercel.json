@@ -1,3 +1,8 @@
 {
-  "crons": []
+  "crons": [
+    {
+      "path": "/api/wealth/lockdown/remind?cron=1",
+      "schedule": "0 */6 * * *"
+    }
+  ]
 }
