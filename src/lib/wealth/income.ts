@@ -65,9 +65,10 @@ export async function summarizeIncome(monthOffset = 0): Promise<IncomeSummary> {
       const amt = parseFloat(tx.amount || "0");
       if (amt <= 0) continue;     // 只看进账
       const desc = tx.description || tx.payee || "(no desc)";
+      const debugStr = JSON.stringify({ d: tx.description, p: tx.payee, m: tx.memo }).slice(0, 200);
       const src = classifyIncome(desc);
       const date = new Date(tx.posted * 1000).toISOString().slice(0, 10);
-      byTx.push({ amount: +amt.toFixed(2), date, desc: desc.slice(0, 50), source: src });
+      byTx.push({ amount: +amt.toFixed(2), date, desc: desc.slice(0, 50), source: src, _debug: debugStr } as any);
       if (src === "hg") { hg += amt; hgCount++; }
       else if (src === "czv") { czv += amt; czvCount++; }
       else if (src === "transfer") { transfer += amt; }
