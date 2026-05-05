@@ -122,11 +122,12 @@ async function syncSimplefin() {
     return false;
   }
   try {
-    // SimpleFIN access token 是 base64 of url:user:pass
+    // SimpleFIN access token 是 base64 of https://user:pass@host/path
     const decoded = Buffer.from(sfToken, "base64").toString();
-    const m = decoded.match(/^(https?:\/\/[^:]+):([^:]+):(.+)$/);
-    if (!m) throw new Error("token 格式错");
-    const [_, baseUrl, user, pass] = m;
+    const u = new URL(decoded);
+    const user = decodeURIComponent(u.username);
+    const pass = decodeURIComponent(u.password);
+    const baseUrl = `${u.protocol}//${u.hostname}${u.pathname}`;
     const auth = Buffer.from(`${user}:${pass}`).toString("base64");
     const r = await fetch(`${baseUrl}/accounts`, {
       headers: { Authorization: `Basic ${auth}` },
