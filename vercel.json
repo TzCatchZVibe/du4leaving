@@ -11,6 +11,10 @@
     {
       "path": "/api/wealth/anomaly/push?cron=1",
       "schedule": "0 16 * * *"
+    },
+    {
+      "path": "/api/wealth/jar/check?cron=1&days=2",
+      "schedule": "0 17 * * *"
     }
   ]
 }

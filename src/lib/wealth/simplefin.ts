@@ -47,31 +47,47 @@ export async function pullSimpleFin(daysBack = 30): Promise<{ accounts: SfAccoun
   return { accounts: data.accounts || [], total_tx };
 }
 
-// 关键词 → 分类
+// 关键词 → 分类 · ④ Maybe transfer 一等公民 · 内部转账不污染 spending
+// internal-transfer / income / fee 都从 spending 排除
 const CATEGORY_RULES: Array<{ pattern: RegExp; cat: string; emoji: string }> = [
+  // 优先级最高 · 内部转账 (不算 spending)
+  { pattern: /capital.*one.*mobile.*pymt|capital.*one.*ach.*deposit|capital.*one.*autopay|capital.*one.*online.*pmt/i, cat: "internal-transfer", emoji: "↔" },
+  { pattern: /^zelle.*from.*haoyu|^haoyu.*zheng|own.*account|own.*xfer/i, cat: "internal-transfer", emoji: "↔" },
+  { pattern: /transfer.*to.*own|transfer.*from.*own|internal.*xfer|^xfer\b/i, cat: "internal-transfer", emoji: "↔" },
+  { pattern: /credit.*card.*payment|cc.*payment|cardmember.*serv/i, cat: "internal-transfer", emoji: "↔" },
+  // 收入 (不算 spending)
+  { pattern: /gusto|happy.*global.*payroll|salary|payroll|wozniak|catchz/i, cat: "income", emoji: "💰" },
+  { pattern: /interest/i, cat: "interest", emoji: "📈" },
+  // 真支出
   { pattern: /starbucks|coffee|cafe|dunkin|peet/i, cat: "coffee", emoji: "☕" },
   { pattern: /doordash|uber.*eats?|grubhub|chipotle|mcdonald|chick-fil|panda|sushi|pizza|restaurant/i, cat: "food-delivery", emoji: "🍔" },
   { pattern: /h-?mart|whole foods|kroger|trader joe|target|walmart|costco|grocery|safeway/i, cat: "groceries", emoji: "🛒" },
   { pattern: /amazon|amzn/i, cat: "amazon", emoji: "📦" },
   { pattern: /shein|temu|pdd|nordstrom|macys|nike|sephora|ulta/i, cat: "shopping", emoji: "👕" },
   { pattern: /uber|lyft|gas|shell|chevron|exxon|76 station/i, cat: "transport", emoji: "🚗" },
-  { pattern: /spotify|netflix|hulu|disney|youtube|apple|cloud|adobe|chatgpt|claude|github/i, cat: "subscription", emoji: "💳" },
+  { pattern: /spotify|netflix|hulu|disney|youtube|apple|cloud|adobe|chatgpt|claude|github|distrokid|suno|midjourney/i, cat: "subscription", emoji: "💳" },
   { pattern: /rent|apartment|landlord|propert/i, cat: "rent", emoji: "🏠" },
   { pattern: /electric|water|gas bill|utility|att|verizon|tmobile|comcast|spectrum/i, cat: "utility", emoji: "💡" },
   { pattern: /coinbase|kraken|gemini|binance/i, cat: "crypto-buy", emoji: "₿" },
   { pattern: /kalshi|polymarket|draftkings|fanduel/i, cat: "betting", emoji: "🎰" },
-  { pattern: /transfer.*to|wire/i, cat: "transfer", emoji: "↔" },
-  { pattern: /salary|payroll|deposit.*from|happy global/i, cat: "income", emoji: "💰" },
   { pattern: /atm|cash withdrawal/i, cat: "cash", emoji: "💵" },
-  { pattern: /interest/i, cat: "interest", emoji: "📈" },
-  { pattern: /fee|service charge/i, cat: "fee", emoji: "🧾" },
+  { pattern: /fee|service charge|maintenance/i, cat: "fee", emoji: "🧾" },
+  // 兜底 · transfer 关键词放最后 · 防止误匹配
+  { pattern: /transfer|wire|zelle/i, cat: "transfer", emoji: "↔" },
 ];
+
+// 不算"真 spending"的类目 · 异常检测 / burn rate 都跳过
+export const NON_SPENDING_CATS = new Set(["internal-transfer", "transfer", "income", "interest"]);
 
 export function categorize(description: string): { cat: string; emoji: string } {
   for (const r of CATEGORY_RULES) {
     if (r.pattern.test(description)) return { cat: r.cat, emoji: r.emoji };
   }
   return { cat: "other", emoji: "•" };
+}
+
+export function isSpending(cat: string): boolean {
+  return !NON_SPENDING_CATS.has(cat);
 }
 
 export interface CategorySummary {
@@ -116,8 +132,14 @@ export async function summarizeWindow(startDate: Date, endDate: Date, daysBackPu
       const { cat, emoji } = categorize(desc);
       const date = new Date(tx.posted * 1000).toISOString().slice(0, 10);
       allTx.push({ desc: desc.slice(0, 50), amount: amt, date, cat, emoji });
-      if (amt > 0) total_in += amt;
-      else total_out += Math.abs(amt);
+      // ④ Maybe transfer 一等公民 · 内部转账/收入/利息 不算 spending
+      const skipForSpending = !isSpending(cat);
+      if (amt > 0) {
+        if (!skipForSpending) total_in += amt;
+      } else {
+        if (!skipForSpending) total_out += Math.abs(amt);
+      }
+      if (skipForSpending) continue;
       if (!byCat[cat]) byCat[cat] = { emoji, count: 0, total: 0 };
       byCat[cat].count++;
       byCat[cat].total += Math.abs(amt);
@@ -129,7 +151,7 @@ export async function summarizeWindow(startDate: Date, endDate: Date, daysBackPu
     .sort((a, b) => b.total_usd - a.total_usd);
 
   const top_5_expenses = allTx
-    .filter((t) => t.amount < 0)
+    .filter((t) => t.amount < 0 && isSpending(t.cat))
     .sort((a, b) => a.amount - b.amount)
     .slice(0, 5)
     .map((t) => ({ ...t, amount: Math.abs(t.amount) }));
@@ -240,11 +262,13 @@ export async function summarizeMonth(daysBack = 30): Promise<MonthSummary> {
       const { cat, emoji } = categorize(desc);
       const date = new Date(tx.posted * 1000).toISOString().slice(0, 10);
       allTx.push({ desc: desc.slice(0, 50), amount: amt, date, cat, emoji });
+      const skipForSpending = !isSpending(cat);
       if (amt > 0) {
-        total_in += amt;
+        if (!skipForSpending) total_in += amt;
       } else {
-        total_out += Math.abs(amt);
+        if (!skipForSpending) total_out += Math.abs(amt);
       }
+      if (skipForSpending) continue;
       if (!byCat[cat]) byCat[cat] = { emoji, count: 0, total: 0 };
       byCat[cat].count++;
       byCat[cat].total += Math.abs(amt);
@@ -256,7 +280,7 @@ export async function summarizeMonth(daysBack = 30): Promise<MonthSummary> {
     .sort((a, b) => b.total_usd - a.total_usd);
 
   const top_5_expenses = allTx
-    .filter((t) => t.amount < 0)
+    .filter((t) => t.amount < 0 && isSpending(t.cat))
     .sort((a, b) => a.amount - b.amount)         // 负数最小 = 最大支出
     .slice(0, 5)
     .map((t) => ({ ...t, amount: Math.abs(t.amount) }));

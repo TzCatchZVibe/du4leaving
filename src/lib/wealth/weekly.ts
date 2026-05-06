@@ -35,38 +35,19 @@ export interface WeeklyReport {
 }
 
 async function llmWeeklyNarrative(d: any): Promise<string> {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) return weeklyFallback(d);
-  const prompt = `你是 TZ 的私人理财顾问 · 写周报 (周日晚)
+  const { speakAsLaoxia } = await import("./voice");
+  const ctx = `请用老虾的调子写本周复盘 (4 句 · 每句 1 行 · "·" 分隔):
+1 句 · 这周净 (赚 - 花 = 攒)
+2 句 · vs 上周 (上升/持平/下降)
+3 句 · 14 天 cashflow 安不安全
+4 句 · 1 个目标的速度
+
 数据 ·
 ${JSON.stringify(d, null, 2)}
 
-要求 ·
-- 中文 · MUJI 暖纸调 · 不指责
-- 4 句 · 每句 1 行 · "·" 分隔
-- 第 1 句 · 这周净 (赚多少 - 花多少 = 攒多少)
-- 第 2 句 · 比上周怎样 (上升 / 持平 / 下降)
-- 第 3 句 · 14 天 cashflow 是否安全 (gap 正负)
-- 第 4 句 · 1 个目标的速度 · 是否在轨
-
 只返回故事文本 · 不带引号 · 不带 JSON`;
-  try {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.6,
-        max_tokens: 300,
-      }),
-    });
-    if (!res.ok) return weeklyFallback(d);
-    const data = await res.json();
-    return data.choices?.[0]?.message?.content?.trim() || weeklyFallback(d);
-  } catch {
-    return weeklyFallback(d);
-  }
+  const out = await speakAsLaoxia(ctx, "medium");
+  return out.startsWith("(老虾今天哑了") ? weeklyFallback(d) : out;
 }
 
 function weeklyFallback(d: any): string {

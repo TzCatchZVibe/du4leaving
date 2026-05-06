@@ -427,6 +427,179 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
+  // /罐 /jar · ① Guilty Pleasure · 看罐子状态
+  if (text === "/罐" || text === "/jar" || text === "/jars") {
+    try {
+      const r = await fetch(`${BASE}/api/wealth/jar`).then(r => r.json());
+      if (!r.ok) {
+        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const lines = [
+        `🎤 Guilty Pleasure 罐`,
+        `每次内疚消费 · 等额计入对应目标`,
+        ``,
+      ];
+      if (!r.jars?.length) {
+        lines.push("(还没罐 · 跑 00013 SQL 默认建好 ep-jar / greencard-jar)");
+      } else {
+        for (const j of r.jars) {
+          lines.push(`${j.emoji} ${j.name}`);
+          lines.push(`   $${j.balance_usd.toFixed(0)}${j.target_goal_slug ? ` → ${j.target_goal_slug}` : ""}`);
+          lines.push(``);
+        }
+      }
+      lines.push(`手动扫一遍 · /罐扫`);
+      await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ /罐 失败 · ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // /罐扫 · 触发 guilty check (按需)
+  if (text === "/罐扫" || text === "/jarcheck" || text === "/罐扫描") {
+    try {
+      const r = await fetch(`${BASE}/api/wealth/jar/check?days=14`).then(r => r.json());
+      if (!r.ok) {
+        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const lines = [`✓ 扫完 · 14 天回溯`, `扫描 ${r.scanned} 笔 · 新触发 ${r.new_events} 笔`, ``];
+      if (r.events.length === 0) {
+        lines.push(`(没匹配规则的花费 · 这是好事)`);
+      } else {
+        for (const e of r.events.slice(0, 8)) {
+          lines.push(`+ $${e.jar_credit} → ${e.jar_slug}`);
+          lines.push(`   ${e.tx_date} · ${e.tx_desc.slice(0, 30)}`);
+        }
+      }
+      lines.push(``, `罐子现状 ·`);
+      for (const j of r.jars_after) {
+        lines.push(`${j.emoji} $${j.balance_usd.toFixed(0)} · ${j.name}`);
+      }
+      await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ /罐扫 失败 · ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // /钱龄 /aom · ③ Age of Money · 签证缓冲指标
+  if (text === "/钱龄" || text === "/aom" || text === "/age" || text === "/缓冲") {
+    try {
+      const r = await fetch(`${BASE}/api/wealth/age-of-money`).then(r => r.json());
+      if (!r.ok) {
+        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const statusEmoji = { thick: "🛡", ok: "✓", thin: "⚠", danger: "🚨" }[r.status as string] || "·";
+      const statusZh = { thick: "厚 · 安全", ok: "尚可", thin: "薄了 · 注意", danger: "危险 · 立刻调整" }[r.status as string] || "";
+      const lines = [
+        `🛡 钱龄 · ${r.age_days} 天`,
+        ``,
+        `${statusEmoji} ${statusZh}`,
+        ``,
+        `现金 · $${r.cash_now.toFixed(0)}`,
+        `日均 · $${r.daily_burn.toFixed(0)}`,
+        ``,
+        `钱龄 = 现金 / 日均花 · 越大缓冲越厚`,
+        `< 30 天 = 签证 / EB-1A 准备金告急`,
+      ];
+      await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ /钱龄 失败 · ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // /大坑 /lumpy · ② YNAB True Expenses · 大坑摊月
+  if (text === "/大坑" || text === "/lumpy" || text === "/真支出") {
+    try {
+      const r = await fetch(`${BASE}/api/wealth/lumpy`).then(r => r.json());
+      if (!r.ok) {
+        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const lines = [
+        `⚠️ 大坑 · 提前摊月 · 不被吓到`,
+        ``,
+        `每月需留 · $${r.monthly_total_needed.toFixed(0)}`,
+        `总剩 · $${r.total_remaining.toFixed(0)}`,
+        ``,
+      ];
+      for (const i of r.items) {
+        const bar = "▰".repeat(Math.floor(i.pct_paid / 10)) + "▱".repeat(10 - Math.floor(i.pct_paid / 10));
+        lines.push(`${i.emoji} ${i.name}`);
+        lines.push(`   ${bar} ${i.pct_paid}%`);
+        lines.push(`   $${i.paid_usd}/$${i.total_usd} · 剩 $${i.remaining_usd}`);
+        if (i.due_date) {
+          lines.push(`   ${i.due_date} · 月需 $${i.monthly_save_needed.toFixed(0)}`);
+        }
+        lines.push(``);
+      }
+      lines.push(`已付更新 · /大坑付 <slug> <金额>`);
+      await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ /大坑 失败 · ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // /大坑付 <slug> <金额>
+  if (text.startsWith("/大坑付") || text.startsWith("/lumpy_paid")) {
+    const arg = text.replace(/^\/(大坑付|lumpy_paid)\s*/, "").trim();
+    const m = arg.match(/^(\S+)\s+(\d+(?:\.\d+)?)$/);
+    if (!m) {
+      await sendTelegramMessage("用法 · /大坑付 <slug> <已付金额>\n例 · /大坑付 ep-gear-physical 500", { chatId, parseMode: undefined });
+      return NextResponse.json({ ok: true });
+    }
+    try {
+      const r = await fetch(`${BASE}/api/wealth/lumpy`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug: m[1], paid_usd: parseFloat(m[2]) }),
+      }).then(r => r.json());
+      if (!r.ok || !r.lumpy) {
+        await sendTelegramMessage(`✗ ${r.error || "找不到"}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      await sendTelegramMessage(`✓ ${r.lumpy.name} · 已付 $${r.lumpy.paid_usd}/$${r.lumpy.total_usd}`, { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // /翻译 <金额> · ⑥ provocation · $30 = N HG 小时 + EP 推 N 天
+  if (text.startsWith("/翻译") || text.startsWith("/tr ") || text.startsWith("/translate")) {
+    const arg = text.replace(/^\/(翻译|tr|translate)\s*\$?/, "").trim();
+    const amount = parseFloat(arg);
+    if (!amount || amount <= 0) {
+      await sendTelegramMessage("用法 · /翻译 <金额>\n例 · /翻译 30\n例 · /翻译 584", { chatId, parseMode: undefined });
+      return NextResponse.json({ ok: true });
+    }
+    try {
+      const r = await fetch(`${BASE}/api/wealth/translate?amount=${amount}`).then(r => r.json());
+      if (!r.ok) {
+        await sendTelegramMessage(`✗ ${r.error}`, { chatId, parseMode: undefined });
+        return NextResponse.json({ ok: true });
+      }
+      const lines = [
+        `💵 $${amount} 不只是 $${amount}`,
+        ``,
+      ];
+      for (const t of r.translations) {
+        lines.push(`${t.emoji} ${t.name} · ${t.description}`);
+      }
+      lines.push(``, `下次花前 · 想想这个`);
+      await sendTelegramMessage(lines.join("\n"), { chatId, parseMode: undefined });
+    } catch (e) {
+      await sendTelegramMessage(`✗ /翻译 失败 · ${(e as Error).message}`, { chatId, parseMode: undefined });
+    }
+    return NextResponse.json({ ok: true });
+  }
+
   // /钱要 /cashflow · B · 14 天 bill vs cash 现金流预测
   if (text.startsWith("/钱要") || text.startsWith("/cashflow") || text.startsWith("/现金流")) {
     try {
