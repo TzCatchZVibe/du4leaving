@@ -69,7 +69,7 @@ async function callOpenRouter(messages: ChatMessage[], opts: OpenRouterOpts): Pr
       "Content-Type": "application/json",
       Authorization: `Bearer ${key}`,
       "HTTP-Referer": "https://du4leaving.vercel.app",
-      "X-Title": "du4leaving · 老虾",
+      "X-Title": "du4leaving-laoxia",
     },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(60_000),
