@@ -26,11 +26,11 @@ interface ChatMessage {
 // 次 · DeepSeek V4 Flash · 便宜快
 // 兜底 · Claude Haiku 4.5 (中文+人格强)
 // 最后 · GPT-4o-mini
+// OpenRouter 限制 · models 数组最多 3 个
 const PRIMARY_MODEL = "deepseek/deepseek-v4-pro";
 const FALLBACK_MODELS = [
   "deepseek/deepseek-v4-flash",
   "anthropic/claude-haiku-4.5",
-  "openai/gpt-4o-mini",
 ];
 // 简单查询 (cron 主动 push 等) 用 flash 省钱
 const SIMPLE_MODEL = "deepseek/deepseek-v4-flash";
