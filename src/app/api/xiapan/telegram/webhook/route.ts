@@ -12,8 +12,8 @@
 
 import { NextResponse } from "next/server";
 import { sendTelegramMessage, tgEnabled } from "@/lib/xiapan/telegram";
-import { chat } from "@/lib/xiapan/llm";
-import { buildToolsDescription, parseToolCalls, executeTool } from "@/lib/xiapan/hermes-tools";
+import { callLaoxia } from "@/lib/laoxia/agent";
+import { setVoiceMode, clearMemory } from "@/lib/laoxia/memory";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 90;
@@ -33,51 +33,7 @@ interface TgUpdate {
   };
 }
 
-const SAGE_SYSTEM = `你是 Theo · Strategist · TZ 的押注顾问 (Telegram 接口版)
-
-风格 · 沉稳 · 中文 · 不用专业术语 · 用了必括号解释
-长度 · ≤ 200 字 (Telegram 屏幕小)
-
-回答结构 (必须严格 markdown · 跨平台简洁) ·
-
-## 决策
-干 / 不干 / 等等 (一句话)
-
-## 理由
-2-3 条 · 引数据
-
-## 仓位
-具体百分比 + 美元 · 如 "押 3% = $30 / 50 张"
-
-像 7 年老 trader 给学徒发语音 · 不催 · 不忽悠`;
-
-async function callSage(question: string): Promise<{ text: string; provider: string }> {
-  const toolsDesc = buildToolsDescription();
-  const augmented = `${SAGE_SYSTEM}\n\n${toolsDesc}`;
-  let currentPrompt = question;
-  let last = { text: "", provider: "static" };
-
-  // 多回合 · 最多 3 跳
-  for (let hop = 0; hop < 3; hop++) {
-    const r = await chat({
-      system: augmented,
-      user: currentPrompt,
-      jsonOutput: false,
-      temperature: 0.3,
-    });
-    last = { text: r.text, provider: r.provider };
-    const { toolCalls, rawAnswer } = parseToolCalls(r.text);
-    if (!toolCalls || toolCalls.length === 0 || hop === 2) {
-      last.text = rawAnswer || r.text;
-      break;
-    }
-    const results = await Promise.all(toolCalls.slice(0, 3).map(executeTool));
-    currentPrompt = question + "\n\n【工具结果】\n" +
-      results.map(rr => `· ${rr.name}: ${rr.error ? "ERR" : JSON.stringify(rr.result).slice(0, 600)}`).join("\n") +
-      "\n\n基于工具数据 · 直接 markdown 答。";
-  }
-  return last;
-}
+// W4 终极 · 老虾 agent 接管 fallback · Theo 押注顾问已退役
 
 // V0.73 W1 Day 4 · 跨环境 base URL · Vercel 用 host header · 本地 fallback :3001
 function getBaseUrl(req: Request): string {
@@ -162,31 +118,43 @@ export async function POST(req: Request) {
   // V0.72 W3 Day 11 · Telegram 降级到 SMS · 游戏在 macOS app
   if (text.startsWith("/start") || text === "/help" || text === "/帮") {
     await sendTelegramMessage(
-      "TZ 个人助理 · 1 bot 管所有钱事\n" +
+      "我是老虾 · TZ 的私人理财搭子\n" +
+      "你想啥就发啥 · 不用记命令\n" +
       "─────────────────────────────────\n\n" +
-      "💰 看 ·\n" +
-      "  /净值       1 屏所有钱\n" +
-      "  /目标       4 目标 (绿卡/EP/房/车) + 速度\n" +
-      "  /账单       本月支出 + 类目 + 日均\n" +
-      "  /工资       HG + 奖金 + CZV\n" +
-      "  /账户       所有账户列表\n\n" +
-      "🔮 引导未来 ·\n" +
-      "  /钱要        14 天内 bill vs 现金 缺口\n" +
-      "  /复盘        本周 Wrapped (周日 9pm 自动 push)\n" +
-      "  /目标 -<n>   重设 deadline (n 月后)\n\n" +
-      "✏️ 改 ·\n" +
-      "  /入 slug 金额        入余额 (大多自动同步)\n" +
-      "  /目标更新 slug 金额  目标累积值\n" +
-      "  /等等  /确认  /取消  lockdown 24h 冷静\n" +
-      "  /导出       CSV\n\n" +
-      "🚨 自动 push (仅重要) ·\n" +
-      "  大单 ≥ $20 · 24h 冷静期\n" +
-      "  支出异常 (类目 +50% vs 4 周均)\n" +
-      "  HG 收入降 ≥ 20% · 红线\n" +
-      "  周日 9pm Wrapped\n\n" +
-      "📌 工作 / 内容 / HG 客户 → 走 Lark CZV-OS",
+      "比如试试 ·\n" +
+      "  · 「看下罐子」「钱够不够」「本周怎么样」\n" +
+      "  · 「我刚 doordash $30」「我想买个 $200 麦」\n" +
+      "  · 「目标进度」「下面要付什么」\n\n" +
+      "命令 (隐形 · 我内部用)·\n" +
+      "  /狠 · 切狠虾模式 (默认温柔)\n" +
+      "  /忘 · 清记忆重来\n" +
+      "  /等等 · /确认 · /取消 · 24h lockdown\n" +
+      "  /导出 · CSV\n\n" +
+      "自动 push ·\n" +
+      "  早 9am · 一句开局\n" +
+      "  晚 9pm · 一句晚问\n" +
+      "  大单 ≥ $20 · 24h 冷静期提醒\n" +
+      "  支出异常 / 罐子触发 / 周日 9pm 周报\n\n" +
+      "工作 / HG / 内容 → 走 Lark CZV-OS · 不在这",
       { chatId, parseMode: undefined }
     );
+    return NextResponse.json({ ok: true });
+  }
+
+  // 老虾人格切换 · /狠 /savage · /温柔 /warm · /忘 /forget
+  if (text === "/狠" || text === "/savage" || text === "/狠虾") {
+    await setVoiceMode(chatId, "savage");
+    await sendTelegramMessage("✓ 切狠虾模式 · 别后悔\n切回 · /温柔", { chatId, parseMode: undefined });
+    return NextResponse.json({ ok: true });
+  }
+  if (text === "/温柔" || text === "/warm" || text === "/温柔虾") {
+    await setVoiceMode(chatId, "warm");
+    await sendTelegramMessage("✓ 切回温柔虾", { chatId, parseMode: undefined });
+    return NextResponse.json({ ok: true });
+  }
+  if (text === "/忘" || text === "/忘记" || text === "/forget" || text === "/clear") {
+    await clearMemory(chatId);
+    await sendTelegramMessage("✓ 老虾记忆清空 · 重新认识你", { chatId, parseMode: undefined });
     return NextResponse.json({ ok: true });
   }
 
@@ -1980,23 +1948,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  // 默认 · 走 Theo (Hermes sage)
-  // 立刻回 "想一下…" 不让用户等
-  await sendTelegramMessage("▲ Theo 想一下...", { chatId, parseMode: undefined, silent: true });
-
+  // 默认 · 走老虾 agent (LLM-first · DeepSeek V4 + tool calling + 记忆)
+  await sendTelegramMessage("…", { chatId, parseMode: undefined, silent: true });
   try {
-    const result = await callSage(text);
-    await sendTelegramMessage(
-      `${result.text}\n\n— 用 ${result.provider}`,
-      { chatId, parseMode: undefined }
-    );
+    const r = await callLaoxia(chatId, text, BASE);
+    await sendTelegramMessage(r.text, { chatId, parseMode: undefined });
   } catch (e) {
-    await sendTelegramMessage(
-      `✗ Theo 暂时不可用 · ${(e as Error).message}\n稍后再问`,
-      { chatId, parseMode: undefined }
-    );
+    await sendTelegramMessage(`✗ 老虾出问题 · ${(e as Error).message}`, { chatId, parseMode: undefined });
   }
-
   return NextResponse.json({ ok: true });
 }
 
