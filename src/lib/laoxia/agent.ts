@@ -1,10 +1,9 @@
-// 老虾 agent · 主循环
-// 模型 · DeepSeek V4 (OpenAI 兼容) · pro 主力 · flash 简单查询 · gpt-4o-mini fallback
-// 流程 · system + 工作窗 + summary + 当前 user → LLM → 多回合 tool use → 最终回话
+// 老虾 agent · 主循环 (OpenRouter 重构)
+// 1 key 通杀 · models 数组自动 failover
 
 import { buildSystemPrompt } from "./prompt";
-import { LAOXIA_TOOLS, toolsForOpenAI, executeTool } from "./tools";
-import { loadWorkingWindow, loadSummary, appendTurns, ConvTurn, maybeSummarize, setUserMood } from "./memory";
+import { toolsForOpenAI, executeTool } from "./tools";
+import { loadWorkingWindow, loadSummary, appendTurns, ConvTurn, maybeSummarize } from "./memory";
 import { listJars } from "@/lib/wealth/guilty";
 import { listLumpy } from "@/lib/wealth/lumpy";
 
@@ -22,57 +21,63 @@ interface ChatMessage {
   name?: string;
 }
 
-const PRO_MODEL = "deepseek-v4-pro";
-const FLASH_MODEL = "deepseek-v4-flash";
-const FALLBACK_MODEL = "gpt-4o-mini";
+// OpenRouter 自动 fallback · 主→次→兜底
+// 主 · DeepSeek V4 Pro · 1M 上下文 + thinking + tool use
+// 次 · DeepSeek V4 Flash · 便宜快
+// 兜底 · Claude Haiku 4.5 (中文+人格强)
+// 最后 · GPT-4o-mini
+const PRIMARY_MODEL = "deepseek/deepseek-v4-pro";
+const FALLBACK_MODELS = [
+  "deepseek/deepseek-v4-flash",
+  "anthropic/claude-haiku-4.5",
+  "openai/gpt-4o-mini",
+];
+// 简单查询 (cron 主动 push 等) 用 flash 省钱
+const SIMPLE_MODEL = "deepseek/deepseek-v4-flash";
+
 const MAX_HOPS = 4;
 
-async function callDeepSeek(model: string, messages: ChatMessage[], opts: { tools?: any[]; temperature?: number; max_tokens?: number } = {}): Promise<any> {
-  const key = process.env.DEEPSEEK_API_KEY;
-  if (!key) throw new Error("DEEPSEEK_API_KEY 未设");
+interface OpenRouterOpts {
+  models?: string[];           // 走 OpenRouter 数组 failover
+  model?: string;              // 单模型
+  tools?: any[];
+  temperature?: number;
+  max_tokens?: number;
+}
+
+async function callOpenRouter(messages: ChatMessage[], opts: OpenRouterOpts): Promise<any> {
+  const key = process.env.OPENROUTER_API_KEY;
+  if (!key) throw new Error("OPENROUTER_API_KEY 未设");
   const body: any = {
-    model,
     messages,
     temperature: opts.temperature ?? 0.7,
     max_tokens: opts.max_tokens ?? 800,
   };
+  if (opts.models?.length) {
+    body.model = opts.models[0];
+    body.models = opts.models;          // OpenRouter 特性 · 主模型 fail 自动切
+  } else if (opts.model) {
+    body.model = opts.model;
+  }
   if (opts.tools?.length) {
     body.tools = opts.tools;
     body.tool_choice = "auto";
   }
-  const res = await fetch("https://api.deepseek.com/chat/completions", {
+  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${key}`,
+      "HTTP-Referer": "https://du4leaving.vercel.app",
+      "X-Title": "du4leaving · 老虾",
+    },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(60_000),
   });
   if (!res.ok) {
     const t = await res.text().catch(() => "");
-    throw new Error(`DeepSeek HTTP ${res.status} · ${t.slice(0, 200)}`);
+    throw new Error(`OpenRouter HTTP ${res.status} · ${t.slice(0, 200)}`);
   }
-  return res.json();
-}
-
-async function callOpenAIFallback(messages: ChatMessage[], opts: { tools?: any[] } = {}): Promise<any> {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) throw new Error("OPENAI_API_KEY 未设 (fallback)");
-  const body: any = {
-    model: FALLBACK_MODEL,
-    messages,
-    temperature: 0.7,
-    max_tokens: 600,
-  };
-  if (opts.tools?.length) {
-    body.tools = opts.tools;
-    body.tool_choice = "auto";
-  }
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(60_000),
-  });
-  if (!res.ok) throw new Error(`OpenAI HTTP ${res.status}`);
   return res.json();
 }
 
@@ -101,7 +106,6 @@ function toChat(turns: ConvTurn[]): ChatMessage[] {
 export async function callLaoxia(chatId: string, userText: string, baseUrl: string): Promise<AgentReply> {
   const today = new Date().toISOString().slice(0, 10);
 
-  // 拉记忆 + 当前状态 · 并发
   const [working, summary, jars, lumpy] = await Promise.all([
     loadWorkingWindow(chatId, 15).catch(() => []),
     loadSummary(chatId).catch(() => ({ chat_id: chatId, summary: null, user_mood: null, voice_mode: "warm" as const })),
@@ -129,19 +133,17 @@ export async function callLaoxia(chatId: string, userText: string, baseUrl: stri
   const turnsToSave: ConvTurn[] = [{ role: "user", content: userText }];
 
   let resp: any;
-  let modelUsed = PRO_MODEL;
   let toolHops = 0;
   let finalText = "";
+  let modelUsed = PRIMARY_MODEL;
 
   try {
     for (let hop = 0; hop < MAX_HOPS; hop++) {
-      try {
-        resp = await callDeepSeek(modelUsed, messages, { tools });
-      } catch (e: any) {
-        console.error("[laoxia] DeepSeek 失败 ·", e.message, "· fallback 到 gpt-4o-mini");
-        resp = await callOpenAIFallback(messages, { tools });
-        modelUsed = FALLBACK_MODEL;
-      }
+      resp = await callOpenRouter(messages, {
+        models: [PRIMARY_MODEL, ...FALLBACK_MODELS],
+        tools,
+      });
+      modelUsed = resp.model || PRIMARY_MODEL;
 
       const choice = resp.choices?.[0];
       const msg = choice?.message;
@@ -162,7 +164,6 @@ export async function callLaoxia(chatId: string, userText: string, baseUrl: stri
       // 有 tool 调 · 执行 + 喂回
       toolHops++;
       messages.push({ role: "assistant", content: msg.content || null, tool_calls: msg.tool_calls });
-      // 记录这条 assistant 的 tool 决定
       for (const tc of msg.tool_calls) {
         turnsToSave.push({
           role: "assistant",
@@ -171,12 +172,11 @@ export async function callLaoxia(chatId: string, userText: string, baseUrl: stri
           tool_args: safeParseJson(tc.function.arguments),
         });
       }
-      // 执行所有 tools 并行
       const results = await Promise.all(
         msg.tool_calls.map(async (tc: any) => {
           const args = safeParseJson(tc.function.arguments);
           const r = await executeTool(tc.function.name, args, baseUrl);
-          return { tc, args, r };
+          return { tc, r };
         })
       );
       for (const { tc, r } of results) {
@@ -185,7 +185,6 @@ export async function callLaoxia(chatId: string, userText: string, baseUrl: stri
         turnsToSave.push({ role: "tool", tool_name: tc.function.name, tool_result: r });
       }
 
-      // 最后一跳 · 强制让 LLM 总结
       if (hop === MAX_HOPS - 1) {
         messages.push({ role: "user", content: "基于工具结果 · 直接给 TZ 回话 · 不再调 tool · ≤ 3 行" });
       }
@@ -194,7 +193,7 @@ export async function callLaoxia(chatId: string, userText: string, baseUrl: stri
     finalText = `(老虾出错 · ${e.message})`;
   }
 
-  // 持久化
+  // 持久化 · 不阻塞回话
   appendTurns(chatId, turnsToSave).catch((e) => console.error("[laoxia] 写记忆失败 ·", e.message));
 
   return { text: finalText, tool_calls_made: toolHops, model_used: modelUsed };
@@ -204,7 +203,7 @@ function safeParseJson(s: string): any {
   try { return JSON.parse(s); } catch { return {}; }
 }
 
-// 后续用 · 摘要老对话
+// 后续用 · 摘要老对话 (用 flash 省钱)
 export async function summarizeOldTurns(chatId: string): Promise<void> {
   await maybeSummarize(chatId, async (olds) => {
     const text = olds.map((t) => `[${t.role}] ${t.tool_name || ""} ${t.content?.slice(0, 100) || ""}`).join("\n");
@@ -213,7 +212,7 @@ export async function summarizeOldTurns(chatId: string): Promise<void> {
       { role: "user", content: text.slice(0, 8000) },
     ];
     try {
-      const r = await callDeepSeek(FLASH_MODEL, messages, { temperature: 0.3, max_tokens: 300 });
+      const r = await callOpenRouter(messages, { model: SIMPLE_MODEL, temperature: 0.3, max_tokens: 300 });
       return r.choices?.[0]?.message?.content?.trim() || "";
     } catch {
       return "";
