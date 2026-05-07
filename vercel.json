@@ -15,14 +15,6 @@
     {
       "path": "/api/wealth/jar/check?cron=1&days=2",
       "schedule": "0 17 * * *"
-    },
-    {
-      "path": "/api/laoxia/morning?cron=1",
-      "schedule": "0 14 * * *"
-    },
-    {
-      "path": "/api/laoxia/evening?cron=1",
-      "schedule": "0 2 * * *"
     }
   ]
 }

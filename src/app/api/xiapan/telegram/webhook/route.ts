@@ -12,8 +12,8 @@
 
 import { NextResponse } from "next/server";
 import { sendTelegramMessage, tgEnabled } from "@/lib/xiapan/telegram";
-import { callLaoxia } from "@/lib/laoxia/agent";
-import { setVoiceMode, clearMemory } from "@/lib/laoxia/memory";
+// 老虾 agent 已迁到 Mac mini 跑 Hermes · 这个 webhook 已退役
+// 若 Telegram 重设 webhook 到这 · 用户得到 410 提示
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 90;
@@ -141,20 +141,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  // 老虾人格切换 · /狠 /savage · /温柔 /warm · /忘 /forget
-  if (text === "/狠" || text === "/savage" || text === "/狠虾") {
-    await setVoiceMode(chatId, "savage");
-    await sendTelegramMessage("✓ 切狠虾模式 · 别后悔\n切回 · /温柔", { chatId, parseMode: undefined });
-    return NextResponse.json({ ok: true });
-  }
-  if (text === "/温柔" || text === "/warm" || text === "/温柔虾") {
-    await setVoiceMode(chatId, "warm");
-    await sendTelegramMessage("✓ 切回温柔虾", { chatId, parseMode: undefined });
-    return NextResponse.json({ ok: true });
-  }
-  if (text === "/忘" || text === "/忘记" || text === "/forget" || text === "/clear") {
-    await clearMemory(chatId);
-    await sendTelegramMessage("✓ 老虾记忆清空 · 重新认识你", { chatId, parseMode: undefined });
+  // 老虾人格切换 / 记忆清空已迁 Mac mini Hermes · 提示用户
+  if (text === "/狠" || text === "/savage" || text === "/温柔" || text === "/warm" || text === "/忘" || text === "/forget" || text === "/clear") {
+    await sendTelegramMessage("⚠️ 老虾已搬家到 Mac mini · 这个 webhook 退役\n直接发自然语言 · 不用命令", { chatId, parseMode: undefined });
     return NextResponse.json({ ok: true });
   }
 
@@ -1948,14 +1937,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true });
   }
 
-  // 默认 · 走老虾 agent (LLM-first · DeepSeek V4 + tool calling + 记忆)
-  await sendTelegramMessage("…", { chatId, parseMode: undefined, silent: true });
-  try {
-    const r = await callLaoxia(chatId, text, BASE);
-    await sendTelegramMessage(r.text, { chatId, parseMode: undefined });
-  } catch (e) {
-    await sendTelegramMessage(`✗ 老虾出问题 · ${(e as Error).message}`, { chatId, parseMode: undefined });
-  }
+  // 默认 · 老虾已搬到 Mac mini Hermes · 此 webhook 退役
+  await sendTelegramMessage(
+    "⚠️ 老虾已搬家到 Mac mini · 这个 webhook 退役\n如果你看到这条 · Telegram webhook 配错了\n应走 Hermes gateway (long polling)",
+    { chatId, parseMode: undefined }
+  );
   return NextResponse.json({ ok: true });
 }
 
